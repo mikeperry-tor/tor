@@ -1769,6 +1769,16 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
                    circ->package_window);
             return -END_CIRC_REASON_TORPROTOCOL;
           }
+
+          /* We count circuit-level sendme's as valid delivered data because
+           * they are rate limited.
+           */
+          if (CIRCUIT_IS_ORIGIN(circ)) {
+            log_notice(LD_APP,"Wat???")
+            circuit_read_valid_data(TO_ORIGIN_CIRCUIT(circ),
+                                    rh.length);
+          }
+
           circ->package_window += CIRCWINDOW_INCREMENT;
           log_debug(LD_APP,
                     "circ-level sendme at non-origin, packagewindow %d.",
