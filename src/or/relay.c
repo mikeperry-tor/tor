@@ -1774,7 +1774,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
            * they are rate limited.
            */
           if (CIRCUIT_IS_ORIGIN(circ)) {
-            log_notice(LD_APP,"Wat???")
+            log_warn(LD_APP,"Wat???");
             circuit_read_valid_data(TO_ORIGIN_CIRCUIT(circ),
                                     rh.length);
           }
