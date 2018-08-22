@@ -1018,6 +1018,7 @@ circuit_build_times_shuffle_and_store_array(circuit_build_times_t *cbt,
   }
 }
 
+#if 0
 /**
  * Filter old synthetic timeouts that were created before the
  * new right-censored Pareto calculation was deployed.
@@ -1054,6 +1055,7 @@ circuit_build_times_filter_timeouts(circuit_build_times_t *cbt)
 
   return num_filtered;
 }
+#endif
 
 /**
  * Load histogram from <b>state</b>, shuffling the resulting array
@@ -1180,9 +1182,11 @@ circuit_build_times_parse_state(circuit_build_times_t *cbt,
 
   circuit_build_times_set_timeout(cbt);
 
+#if 0
   if (!state->CircuitBuildAbandonedCount && cbt->total_build_times) {
     circuit_build_times_filter_timeouts(cbt);
   }
+#endif
 
  done:
   tor_free(loaded_times);
