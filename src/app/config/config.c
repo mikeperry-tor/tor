@@ -395,6 +395,7 @@ static config_var_t option_vars_[] = {
   V(ExcludeExitNodes,            ROUTERSET, NULL),
   OBSOLETE("ExcludeSingleHopRelays"),
   V(ExitNodes,                   ROUTERSET, NULL),
+  V(MiddleNodes,                 ROUTERSET, NULL),
   V(ExitPolicy,                  LINELIST, NULL),
   V(ExitPolicyRejectPrivate,     BOOL,     "1"),
   V(ExitPolicyRejectLocalInterfaces, BOOL, "0"),
@@ -1695,6 +1696,7 @@ options_need_geoip_info(const or_options_t *options, const char **reason_out)
   int routerset_usage =
     routerset_needs_geoip(options->EntryNodes) ||
     routerset_needs_geoip(options->ExitNodes) ||
+    routerset_needs_geoip(options->MiddleNodes) ||
     routerset_needs_geoip(options->ExcludeExitNodes) ||
     routerset_needs_geoip(options->ExcludeNodes) ||
     routerset_needs_geoip(options->HSLayer2Nodes) ||
@@ -2164,6 +2166,7 @@ options_act(const or_options_t *old_options)
                          options->HSLayer2Nodes) ||
         !routerset_equal(old_options->HSLayer3Nodes,
                          options->HSLayer3Nodes) ||
+        !routerset_equal(old_options->MiddleNodes, options->MiddleNodes) ||
         !routerset_equal(old_options->Tor2webRendezvousPoints,
                          options->Tor2webRendezvousPoints) ||
         options->StrictNodes != old_options->StrictNodes) {
