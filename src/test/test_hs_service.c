@@ -101,6 +101,7 @@ mock_relay_send_command_from_edge(streamid_t stream_id, circuit_t *circ,
                                   uint8_t relay_command, const char *payload,
                                   size_t payload_len,
                                   crypt_path_t *cpath_layer,
+                                  int custom_cpath,
                                   const char *filename, int lineno)
 {
   (void) stream_id;
@@ -109,6 +110,7 @@ mock_relay_send_command_from_edge(streamid_t stream_id, circuit_t *circ,
   (void) payload;
   (void) payload_len;
   (void) cpath_layer;
+  (void) custom_cpath;
   (void) filename;
   (void) lineno;
   return 0;
@@ -1445,12 +1447,14 @@ mock_relay_send_rendezvous1(streamid_t stream_id, circuit_t *circ,
                             uint8_t relay_command, const char *payload,
                             size_t payload_len,
                             crypt_path_t *cpath_layer,
+                            int custom_cpath,
                             const char *filename, int lineno)
 {
   (void) stream_id;
   (void) circ;
   (void) relay_command;
   (void) cpath_layer;
+  (void) custom_cpath;
   (void) filename;
   (void) lineno;
 
