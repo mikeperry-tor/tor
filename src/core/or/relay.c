@@ -526,6 +526,7 @@ relay_command_to_string(uint8_t command)
     case RELAY_COMMAND_INTRODUCE_ACK: return "INTRODUCE_ACK";
     case RELAY_COMMAND_EXTEND2: return "EXTEND2";
     case RELAY_COMMAND_EXTENDED2: return "EXTENDED2";
+    case RELAY_COMMAND_PADDING_NEGOTIATE: return "PADDING_NEGOTIATE";
     default:
       tor_snprintf(buf, sizeof(buf), "Unrecognized relay command %u",
                    (unsigned)command);
@@ -580,6 +581,9 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
             cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward");
 
   if (relay_command == RELAY_COMMAND_DROP) {
+    log_notice(LD_OR,"delivering %d cell %s.", relay_command,
+              cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward");
+
     rep_hist_padding_count_write(PADDING_TYPE_DROP);
     circpad_event_padding_sent(circ);
   } else {
@@ -1487,9 +1491,18 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
     }
   }
 
-  if (relay_command == RELAY_COMMAND_DROP) {
+  if (rh.command == RELAY_COMMAND_PADDING_NEGOTIATE) {
+    circpad_event_padding_negotiate(circ, cell);
+
     rep_hist_padding_count_read(PADDING_TYPE_DROP);
     circpad_event_padding_received(circ);
+    return 0;
+  }
+
+  if (rh.command == RELAY_COMMAND_DROP) {
+    rep_hist_padding_count_read(PADDING_TYPE_DROP);
+    circpad_event_padding_received(circ);
+    log_notice(LD_OR,"Got padding cell!");
     return 0;
   } else {
     circpad_event_nonpadding_received(circ);
@@ -1704,6 +1717,12 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
                      * here. */
         }
       }
+
+      /* Negotiate circuit setup padding if the middle is open, and it is
+       * supported */
+      circpad_negotiate_padding(TO_ORIGIN_CIRCUIT(circ),
+                                CIRCPAD_MACHINE_CIRC_SETUP, 1);
+
       if ((reason=circuit_send_next_onion_skin(TO_ORIGIN_CIRCUIT(circ)))<0) {
         log_info(domain,"circuit_send_next_onion_skin() failed.");
         return reason;

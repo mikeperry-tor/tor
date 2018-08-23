@@ -38,6 +38,9 @@ static int protocol_list_contains(const smartlist_t *protos,
 static const struct {
   protocol_type_t protover_type;
   const char *name;
+/* If you add a new protocol here, you probably also want to add
+ * parsing for it in routerstatus_parse_entry_from_string() so that
+ * it is set in routerstatus_t */
 } PROTOCOL_NAMES[] = {
   { PRT_LINK, "Link" },
   { PRT_LINKAUTH, "LinkAuth" },
@@ -48,6 +51,7 @@ static const struct {
   { PRT_HSREND, "HSRend" },
   { PRT_DESC, "Desc" },
   { PRT_MICRODESC, "Microdesc"},
+  { PRT_PADDING, "Padding"},
   { PRT_CONS, "Cons" }
 };
 
@@ -376,7 +380,8 @@ protover_get_supported_protocols(void)
     "Link=1-5 "
     "LinkAuth=1,3 "
     "Microdesc=1-2 "
-    "Relay=1-2";
+    "Relay=1-2 "
+    "Padding=1";
 }
 
 /** The protocols from protover_get_supported_protocols(), as parsed into a
