@@ -1,0 +1,16 @@
+TODO sketch for this branch, in rough priority order:
+
+- Allow padding on specific circuit purposes and to specific hops
+- Allow padding events to start/stop padding based on circuit
+  construction state and stream usage.
+- Check https://trac.torproject.org/projects/tor/ticket/25505 for
+  more accurate event sources
+- Support torrc load+serialization of state machines
+- Support consensus load+serialization of state machines
+- Come up with some good histograms for eg circuit setup fingerprinting,
+  website fingerprinting, and vanguards usage.
+- Experiment with run-length histograms and other histogram/distribution
+  encoding methods.
+- Verify padding comes from correct hop for dropped cell accounting:
+  https://trac.torproject.org/projects/tor/ticket/25501
+
