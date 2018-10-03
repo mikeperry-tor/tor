@@ -17,6 +17,8 @@ typedef struct circuit_t circuit_t;
 typedef struct origin_circuit_t origin_circuit_t;
 typedef struct cell_t cell_t;
 
+/* High level: Each circuit has up to two state machines, and each state
+   machine consists of these states */
 typedef enum {
   CIRCPAD_STATE_START = 0,
   CIRCPAD_STATE_BURST = 1,
@@ -25,6 +27,7 @@ typedef enum {
 } circpad_statenum_t;
 #define CIRCPAD_NUM_STATES  ((uint8_t)CIRCPAD_STATE_END+1)
 
+/** You can move between the above states using these events below */
 /**
  * These constants form a bitfield to specify the types of events
  * that can cause transitions between state machine states.
@@ -46,11 +49,20 @@ typedef enum {
 
 #define CIRCPAD_DELAY_INFINITE  (UINT32_MAX)
 
+/** Token removal: When you see a regular cell at a particular time, you remove a token from hat delay XXX
+
+    Strategies for how to remove tokens:
+    - Should we remove from the higher bin
+    - From the lower bin
+    - Don't remove at all etc.
+ */
 typedef enum {
   CIRCPAD_TOKEN_REMOVAL_NONE = 0,
   CIRCPAD_TOKEN_REMOVAL_HIGHER = 1,
   CIRCPAD_TOKEN_REMOVAL_LOWER = 2,
+  /* closest by index */
   CIRCPAD_TOKEN_REMOVAL_CLOSEST = 3,
+  /* closest by time value */
   CIRCPAD_TOKEN_REMOVAL_CLOSEST_USEC = 4
 } circpad_removal_t;
 
@@ -63,16 +75,24 @@ typedef enum {
  * state in the adaptive padding machine.
  */
 typedef struct circpad_state_t {
+  /* how long the histogram is (in bins) */
   uint8_t histogram_len;
+  /* histogram itself: an array of uint16s of tokens */
   uint16_t histogram[CIRCPAD_MAX_HISTOGRAM_LEN];
+  /* total number of tokens */
   uint32_t histogram_total;
+  /* microseconds of the first bin of histogram */
   uint32_t start_usec;
+  /* the time value of the last bin of the histogram.
+     so together they define the span of the delay */
   uint16_t range_sec;
 
   /**
    * This is a bitfield that specifies which direction and types
    * of traffic that cause us to remain in the current state. Cancel the
    * pending padding packet (if any), and then await the next event.
+   *
+   * Example: Cancel padding if I saw a regular data packet.
    */
   circpad_transition_t transition_cancel_events;
 
@@ -80,11 +100,17 @@ typedef struct circpad_state_t {
    * This is an array of bitfields that specifies which direction and
    * types of traffic that cause us to abort our scheduled packet and
    * switch to the state corresponding to the index of the array.
+   *
+   * Example: If the bins are empty (CIRCPAD_TRANSITION_ON_BINS_EMPTY) and that
+   * bit is set in burst state, then transition to the burst state.
    */
   circpad_transition_t transition_events[CIRCPAD_NUM_STATES];
 
   /* If true, estimate the RTT and use that for the histogram base instead of
    * start_usec.
+   *
+   * Instead of hardcoding a start of the histogram, measure the round trip
+   * time of circuits that are to the exit.
    *
    * Right now this is only supported for relay-side state machines.
    */
@@ -100,6 +126,8 @@ typedef struct circpad_state_t {
  * machine. The mutable information must be kept separate because
  * it exists per-circuit, where as the machines themselves are global.
  * This separation is done to conserve space in the circuit structure.
+ *
+ * This is the per-circuit state that changes regarding the global state machine
  */
 typedef struct circpad_machineinfo_t {
   HANDLE_ENTRY(circpad_machineinfo, circpad_machineinfo_t);
@@ -150,9 +178,11 @@ typedef struct circpad_machineinfo_t {
 
 HANDLE_DECL(circpad_machineinfo, circpad_machineinfo_t,);
 
+/** Helper macro to get an actual state machine from a machineinfo? */
 #define CIRCPAD_GET_MACHINE(machineinfo) \
     ((machineinfo)->on_circ->padding_machine[(machineinfo)->machine_index])
 
+/** Global state machine structure from the consensus */
 typedef struct circpad_machine_t {
   circpad_transition_t transition_burst_events;
   circpad_transition_t transition_gap_events;
@@ -163,6 +193,7 @@ typedef struct circpad_machine_t {
   uint8_t is_initialized : 1;
 } circpad_machine_t;
 
+/** Final decision (just for unittest?) */
 typedef enum {
   CIRCPAD_WONTPAD_EVENT = 0,
   CIRCPAD_WONTPAD_CANCELED,
@@ -172,6 +203,10 @@ typedef enum {
   CIRCPAD_PADDING_SENT
 } circpad_decision_t;
 
+/* Events */
+
+/* There are 4 events. We should have 8 call sites, because we handle origin
+   and non-origin cases differently. */
 void circpad_event_nonpadding_sent(circuit_t *on_circ);
 void circpad_event_nonpadding_received(circuit_t *on_circ);
 
@@ -190,6 +225,10 @@ void circpad_event_bins_empty(circpad_machineinfo_t *mi);
  * We want to be able to define extra numbers in the consensus/torrc, though.
  */
 typedef uint8_t circpad_machine_num_t;
+
+/* Toy state machines */
+
+/* They attach a state machine to a circuit */
 
 void circpad_circ_client_machine_setup(circuit_t *);
 void circpad_circ_responder_machine_setup(circuit_t *on_circ);
