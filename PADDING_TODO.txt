@@ -1,16 +1,40 @@
 TODO sketch for this branch, in rough priority order:
 
+- Update proposal
+-- Switch from sending state machines to requesting a "menu option" of state
+   machine.
+
+- Chutney
+
+- Fix Leaky Crypto
+  - 1 week?
+
+- Verify padding comes from correct hop for dropped cell accounting:
+  https://trac.torproject.org/projects/tor/ticket/25501
+  - 3 days
+
+- DOCDOC functions
+
 - Allow padding on specific circuit purposes and to specific hops
+  - 2 weeks
+
 - Allow padding events to start/stop padding based on circuit
-  construction state and stream usage.
+  construction state and stream usage and target circuit lifetime
+  - 1 week
+
 - Check https://trac.torproject.org/projects/tor/ticket/25505 for
   more accurate event sources
+  - ??
+
 - Support torrc load+serialization of state machines
+  - ??
+
 - Support consensus load+serialization of state machines
+  - ??
+
+======== 0.3.6 ========
+
 - Come up with some good histograms for eg circuit setup fingerprinting,
   website fingerprinting, and vanguards usage.
 - Experiment with run-length histograms and other histogram/distribution
   encoding methods.
-- Verify padding comes from correct hop for dropped cell accounting:
-  https://trac.torproject.org/projects/tor/ticket/25501
-
