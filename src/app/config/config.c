@@ -395,6 +395,7 @@ static config_var_t option_vars_[] = {
   V(ExcludeExitNodes,            ROUTERSET, NULL),
   OBSOLETE("ExcludeSingleHopRelays"),
   V(ExitNodes,                   ROUTERSET, NULL),
+  /* We need this to specify a specific middle node to do the experiments */
   V(MiddleNodes,                 ROUTERSET, NULL),
   V(ExitPolicy,                  LINELIST, NULL),
   V(ExitPolicyRejectPrivate,     BOOL,     "1"),

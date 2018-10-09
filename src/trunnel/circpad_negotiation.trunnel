@@ -1,7 +1,12 @@
+/* Thesea re the padding negotiatoon commands */
 const CIRCPAD_COMMAND_STOP = 1;
 const CIRCPAD_COMMAND_START = 2;
 
+/* Built-in machine types */
+
+/* 1) Machine that obscures circuit setup */
 const CIRCPAD_MACHINE_CIRC_SETUP = 1;
+/* 2) Non-implemneted that obscures HS client intro... */
 const CIRCPAD_MACHINE_HS_CLIENT_INTRO = 2;
 const CIRCPAD_MACHINE_HS_SERVICE_INTRO = 3;
 const CIRCPAD_MACHINE_HS_SERVICE_REND = 4;
