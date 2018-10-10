@@ -9,6 +9,8 @@ TODO sketch for this branch, in rough priority order:
 - Fix Leaky Crypto
   - 1 week?
 
+- Clean up/fix XXX's and FIXMEs
+
 - Verify padding comes from correct hop for dropped cell accounting:
   https://trac.torproject.org/projects/tor/ticket/25501
   - 3 days
