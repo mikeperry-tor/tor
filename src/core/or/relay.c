@@ -363,7 +363,6 @@ MOCK_IMPL(int,
 circuit_package_relay_cell, (cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
                            crypt_path_t *layer_hint, streamid_t on_stream,
-                           int custom_cpath,
                            const char *filename, int lineno))
 {
   channel_t *chan; /* where to send the cell */
@@ -396,8 +395,7 @@ circuit_package_relay_cell, (cell_t *cell, circuit_t *circ,
       return 0; /* just drop it */
     }
 
-    relay_encrypt_cell_outbound(cell, TO_ORIGIN_CIRCUIT(circ), layer_hint,
-                                custom_cpath);
+    relay_encrypt_cell_outbound(cell, TO_ORIGIN_CIRCUIT(circ), layer_hint);
 
     /* Update circ written totals for control port */
     origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
@@ -553,7 +551,6 @@ MOCK_IMPL(int,
 relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
                                uint8_t relay_command, const char *payload,
                                size_t payload_len, crypt_path_t *cpath_layer,
-                               int custom_cpath,
                                const char *filename, int lineno))
 {
   cell_t cell;
@@ -660,8 +657,7 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   }
 
   if (circuit_package_relay_cell(&cell, circ, cell_direction, cpath_layer,
-                                 stream_id, custom_cpath,
-                                 filename, lineno) < 0) {
+                                 stream_id, filename, lineno) < 0) {
     log_warn(LD_BUG,"circuit_package_relay_cell failed. Closing.");
     circuit_mark_for_close(circ, END_CIRC_REASON_INTERNAL);
     return -1;

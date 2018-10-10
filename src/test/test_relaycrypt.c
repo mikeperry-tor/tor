@@ -106,8 +106,7 @@ test_relaycrypt_outbound(void *arg)
 
     /* Encrypt the cell to the last hop */
     relay_encrypt_cell_outbound(&encrypted, cs->origin_circ,
-                                cs->origin_circ->cpath->prev,
-                                0);
+                                cs->origin_circ->cpath->prev);
 
     for (j = 0; j < 3; ++j) {
       crypt_path_t *layer_hint = NULL;

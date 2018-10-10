@@ -20,8 +20,7 @@ int relay_decrypt_cell(circuit_t *circ, cell_t *cell,
                        cell_direction_t cell_direction,
                        crypt_path_t **layer_hint, char *recognized);
 void relay_encrypt_cell_outbound(cell_t *cell, origin_circuit_t *or_circ,
-                            crypt_path_t *layer_hint,
-                            int custom_cpath);
+                            crypt_path_t *layer_hint);
 void relay_encrypt_cell_inbound(cell_t *cell, or_circuit_t *or_circ);
 
 void relay_crypto_clear(relay_crypto_t *crypto);

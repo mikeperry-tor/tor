@@ -27,7 +27,6 @@ MOCK_DECL(int,
 relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
                                uint8_t relay_command, const char *payload,
                                size_t payload_len, crypt_path_t *cpath_layer,
-                               int custom_cpath,
                                const char *filename, int lineno));
 /* Indicates to relay_send_command_from_edge() that it is a control cell. */
 #define CONTROL_CELL_ID 0
@@ -35,7 +34,7 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
                                      payload_len, cpath_layer)          \
   relay_send_command_from_edge_((stream_id), (circ), (relay_command),   \
                                 (payload), (payload_len), (cpath_layer), \
-                                0, __FILE__, __LINE__)
+                                __FILE__, __LINE__)
 int connection_edge_send_command(edge_connection_t *fromconn,
                                  uint8_t relay_command, const char *payload,
                                  size_t payload_len);
@@ -82,7 +81,6 @@ MOCK_DECL(int, channel_flush_from_first_active_circuit,
 MOCK_DECL(int, circuit_package_relay_cell, (cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
                            crypt_path_t *layer_hint, streamid_t on_stream,
-                           int custom_cpath,
                            const char *filename, int lineno));
 
 void update_circuit_on_cmux_(circuit_t *circ, cell_direction_t direction,

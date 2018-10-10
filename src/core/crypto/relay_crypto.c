@@ -184,20 +184,10 @@ relay_decrypt_cell(circuit_t *circ, cell_t *cell,
 void
 relay_encrypt_cell_outbound(cell_t *cell,
                             origin_circuit_t *circ,
-                            crypt_path_t *layer_hint,
-                            int custom_cpath)
+                            crypt_path_t *layer_hint)
 {
   crypt_path_t *thishop; /* counter for repeated crypts */
-  crypt_path_t *endhop = NULL;
   relay_set_digest(layer_hint->crypto.f_digest, cell);
-
-  /* Using layer_hint rather than the circ->cpath->prev
-   * allows leaky-pipe sends with short cpaths. */
-  if (custom_cpath) {
-    endhop = layer_hint->prev;
-  } else {
-    endhop = circ->cpath->prev;
-  }
 
   thishop = layer_hint;
   /* moving from farthest to nearest hop */
@@ -207,7 +197,7 @@ relay_encrypt_cell_outbound(cell_t *cell,
     relay_crypt_one_payload(thishop->crypto.f_crypto, cell->payload);
 
     thishop = thishop->prev;
-  } while (thishop != endhop);
+  } while (thishop != circ->cpath->prev);
 }
 
 /**

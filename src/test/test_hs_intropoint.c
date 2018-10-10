@@ -99,7 +99,6 @@ mock_relay_send_command_from_edge(streamid_t stream_id, circuit_t *circ,
                                   uint8_t relay_command, const char *payload,
                                   size_t payload_len,
                                   crypt_path_t *cpath_layer,
-                                  int custom_cpath,
                                   const char *filename, int lineno)
 {
   (void) stream_id;
@@ -110,7 +109,6 @@ mock_relay_send_command_from_edge(streamid_t stream_id, circuit_t *circ,
   (void) cpath_layer;
   (void) filename;
   (void) lineno;
-  (void) custom_cpath;
   return 0;
 }
 

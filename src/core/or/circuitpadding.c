@@ -556,9 +556,9 @@ circpad_send_command_to_hop(origin_circuit_t *circ, int hopnum,
           circ->global_identifier);
 
   /* Send the drop command to the second hop */
-  ret = relay_send_command_from_edge_(0, TO_CIRCUIT(circ), relay_command,
+  ret = relay_send_command_from_edge(0, TO_CIRCUIT(circ), relay_command,
                                      (const char*)payload, payload_len,
-                                     new_cpath, 1, __FILE__, __LINE__);
+                                     new_cpath);
 
   cpath_free_shallow(new_cpath);
 
