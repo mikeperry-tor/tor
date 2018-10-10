@@ -395,7 +395,9 @@ static config_var_t option_vars_[] = {
   V(ExcludeExitNodes,            ROUTERSET, NULL),
   OBSOLETE("ExcludeSingleHopRelays"),
   V(ExitNodes,                   ROUTERSET, NULL),
-  /* We need this to specify a specific middle node to do the experiments */
+  /* Researchers need a way to tell their clients to use specific
+   * middles that they also control, to allow safe live-network
+   * experimentation with new padding machines. */
   V(MiddleNodes,                 ROUTERSET, NULL),
   V(ExitPolicy,                  LINELIST, NULL),
   V(ExitPolicyRejectPrivate,     BOOL,     "1"),

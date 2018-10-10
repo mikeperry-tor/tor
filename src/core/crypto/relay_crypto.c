@@ -191,7 +191,6 @@ relay_encrypt_cell_outbound(cell_t *cell,
   crypt_path_t *endhop = NULL;
   relay_set_digest(layer_hint->crypto.f_digest, cell);
 
-  /* new age crypto */
   /* Using layer_hint rather than the circ->cpath->prev
    * allows leaky-pipe sends with short cpaths. */
   if (custom_cpath) {

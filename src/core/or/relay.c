@@ -297,7 +297,7 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
   if (cell_direction == CELL_DIRECTION_OUT) {
     cell->circ_id = circ->n_circ_id; /* switch it */
     chan = circ->n_chan;
-    /* When it's out (direction away from origin), then we received non-padding
+    /* When direction is out (away from origin), then we received non-padding
        cell coming from the origin to us. */
     circpad_event_nonpadding_received(circ);
   } else if (! CIRCUIT_IS_ORIGIN(circ)) {
@@ -587,20 +587,22 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   log_debug(LD_OR,"delivering %d cell %s.", relay_command,
             cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward");
 
-  /* RELAY_COMMAND_DROP is the preexisting padding cell in tor, this is what we
-     are usin through this code.  Wheras the CELL_PADDING is a channel-level
-     padding thing, which means that it doesn't get relayed through the network
-     (from relay-to-relay, or form client-to-guard). */
-  if (relay_command == RELAY_COMMAND_DROP) {
+  /* RELAY_COMMAND_DROP is the multi-hop (aka circuit-level) padding cell in
+   * tor. (CELL_PADDING is a channel-level padding cell, which is not relayed
+   * or processed here) */
+   if (relay_command == RELAY_COMMAND_DROP) {
     log_notice(LD_OR,"delivering %d cell %s.", relay_command,
               cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward");
 
     rep_hist_padding_count_write(PADDING_TYPE_DROP);
     /* This is a padding cell sent from the client or from the middle node,
-     * because it's invoked from circuitpadding.c */
+     * because it's invoked from circuitpadding.c. */
     circpad_event_padding_sent(circ);
   } else {
-    /* This is a non-padding cell sent from the client */
+    /* This is a non-padding cell sent from the client (or some other
+     * leaky-pipe send from this node, which currently does not happen
+     * for anything but padding XXX: Is this true? HS seems to use it..
+     * And maybe extends and truncates, too?). */
     circpad_event_nonpadding_sent(circ);
   }
 
@@ -1519,8 +1521,8 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
   if (rh.command == RELAY_COMMAND_DROP) {
     rep_hist_padding_count_read(PADDING_TYPE_DROP);
     /* The cell should be recognized by now, which means that we are on the
-       destination, which means that we received a padding cell. WE might be
-       the client or the Middle node */
+       destination, which means that we received a padding cell. We might be
+       the client or the Middle node, still, because leaky-pipe. */
     circpad_event_padding_received(circ);
     log_notice(LD_OR,"Got padding cell!");
     return 0;

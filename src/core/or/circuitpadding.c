@@ -421,20 +421,19 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
      bin we are in at the current time */
   target_bin_us = current_time - mi->padding_was_scheduled_at_us;
 
-  // Cancel the padding, as this packet is counting instead.
   /* We are treating this non-padding cell as a padding cell, so we cancel
      padding */
   mi->padding_was_scheduled_at_us = 0;
   timer_disable(mi->padding_timer);
 
-  /* If we are not storing lines or if we are not removing tokens we dont need
-     to do any of that */
+  /* If we are not in a padding state (like start or end) or if we are not
+   * removing tokens we dont need to do any of that */
   if (!state || state->token_removal == CIRCPAD_TOKEN_REMOVAL_NONE)
     return;
 
   tor_assert(mi->histogram && mi->histogram_len == state->histogram_len);
 
-  /* Various token removal strategies */
+  /* Perform the specified token removal strategy */
   switch (state->token_removal) {
     case CIRCPAD_TOKEN_REMOVAL_NONE:
       return;
@@ -450,10 +449,10 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
       break;
   }
 
-  /* Check if bins empty. Right now, we're operating under the assumption
-   * that this loop is better than the extra space for maintaining a
-   * running total in machineinfo */
-  /* We already have an element for this, but it's in the global state */
+  /* Check if bins empty. This requires summing up the current mutable
+   * machineinfo histogram token total and checking if it is zero.
+   * Machineinfo does not keep a running token count. We're assuming the
+   * extra space is not worth this short loop iteration. */
   for (int b = 0; b < state->histogram_len; b++)
     histogram_total += mi->histogram[b];
 
@@ -633,15 +632,20 @@ circpad_send_padding_callback(tor_timer_t *timer, void *args,
   //total_timers_pending--;
 }
 
+/**
+ * Schedule the next padding time according to the machineinfo on a
+ * circuit.
+ *
+ * The histograms represent inter-packet-delay. Whenever you get an packet
+ * event you should be scheduling your next timer (after cancelling any old
+ * ones and updating tokens accordingly).
+ */
 circpad_decision_t
 circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
 {
   uint32_t in_us = 0;
   struct timeval timeout;
   tor_assert(mi);
-
-  /* The histograms represent inter-packet-delay, whenever you get an event
-     yoiu should be scheduling your next timer */
 
   log_fn(LOG_INFO, LD_CIRC, "Scheduling padding?");
   // Don't pad in either state start or end (but
@@ -714,12 +718,14 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
   const circpad_state_t *state =
       circpad_machine_current_state(mi);
 
-  /* XXX can we make the start state transition also generic? */
+  /* XXX can we make the start state transition also generic? Can we
+   * give them a dummy circpad_state_t to combine with the burst+gap
+   * blocks below? */
 
   /* Check start state transitions */
   if (!state) {
     /* If state is null we are in start state or end state.
-       IF we in end state we dont pad no matter what. */
+       If we in end state we don't pad no matter what. */
     if (mi->current_state == CIRCPAD_STATE_START) {
       /* If we are in start state, first check the burst transition events to
          see if we should transition to burst */
@@ -904,11 +910,14 @@ circpad_event_bins_empty(circpad_machineinfo_t *mi)
   }
 }
 
-/* lacks comments */
-
-/** When the client sends its choice of state machine to the middle.
- *  It's used to tell the middle to choose a specific machine.
- *  This function is called when the middle receives the cell */
+/**
+ * Event callback to tell us that we have received a padding_negotiate
+ * cell.
+ *
+ * This event is called at the middle node upon receipt of the client's
+ * choice of state machine, so that it can use the requested state machine
+ * index, if it is available.
+ */
 void
 circpad_event_padding_negotiate(circuit_t *circ, cell_t *cell)
 {
@@ -1017,7 +1026,12 @@ circpad_circ_client_machine_setup(circuit_t *on_circ)
   circ_client_machine.burst.start_usec = 500;
   circ_client_machine.burst.range_sec = 1;
   /* We have 5 tokens in the histogram, which means that all circuits will look
-   * like they have 8 hops */
+   * like they have 7 hops (since we start this machine after the second hop,
+   * and tokens are decremented for any valid hops, and fake extends are
+   * used after that -- 2+5==7).
+   *
+   * XXX: Is this true? We may decrement this on both send+recieve of real
+   * extend cells, as per XXX in circpad_machine_transition() above :/ */
   circ_client_machine.burst.histogram[0] = 5;
   circ_client_machine.burst.histogram_total = 5;
 
@@ -1044,16 +1058,19 @@ circpad_circ_responder_machine_setup(circuit_t *on_circ)
   /* This is the settings of the state machine. In the future we are gonna
      serialize this into the consensus or the torrc */
 
-  /* We transition to the burst state on padding receive and on non-padding recieve */
+  /* We transition to the burst state on padding receive and on non-padding
+   * recieve */
   circ_responder_machine.transition_burst_events =
     CIRCPAD_TRANSITION_ON_PADDING_RECV |
     CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
 
-  /* Inside the burst state we _stay_ in the burst state when a non-padding is sent */
+  /* Inside the burst state we _stay_ in the burst state when a non-padding
+   * is sent */
   circ_responder_machine.burst.transition_events[CIRCPAD_STATE_BURST] =
     CIRCPAD_TRANSITION_ON_NONPADDING_SENT;
 
-  /* Inside the burst state we transition to the gap state when we receive a padding cell */
+  /* Inside the burst state we transition to the gap state when we receive a
+   * padding cell */
   circ_responder_machine.burst.transition_events[CIRCPAD_STATE_GAP] =
     CIRCPAD_TRANSITION_ON_PADDING_RECV;
 
@@ -1074,12 +1091,14 @@ circpad_circ_responder_machine_setup(circuit_t *on_circ)
   circ_responder_machine.burst.histogram[0] = 1; // Only infinity bin here
   circ_responder_machine.burst.histogram_total = 1;
 
-  /* From the gap state, we _stay_ in the gap state, when we receive padding or non padding */
+  /* From the gap state, we _stay_ in the gap state, when we receive padding
+   * or non padding */
   circ_responder_machine.gap.transition_events[CIRCPAD_STATE_GAP] =
     CIRCPAD_TRANSITION_ON_PADDING_RECV |
     CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
 
-  /* And from the gap state, we go to the end, when the bins are empty or a non-padding cell is sent */
+  /* And from the gap state, we go to the end, when the bins are empty or a
+   * non-padding cell is sent */
   circ_responder_machine.gap.transition_events[CIRCPAD_STATE_END] =
     CIRCPAD_TRANSITION_ON_BINS_EMPTY |
     CIRCPAD_TRANSITION_ON_NONPADDING_SENT;
@@ -1163,7 +1182,8 @@ circpad_negotiate_padding(origin_circuit_t *circ,
   ssize_t len;
 
   // If we have a padding machine, we already did this.
-  /* And this is the reason we dont do this for every fucking hop */
+  /* This check prevents us from making a new machine for every cell.
+   * XXX: Maybe this means we need better event differentiation? */
   if (TO_CIRCUIT(circ)->padding_machine[0]) {
     return 1;
   }

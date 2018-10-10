@@ -184,15 +184,16 @@ struct circuit_t {
       circuitmap. */
   HT_ENTRY(circuit_t) hs_circuitmap_node;
 
-  /* The state machines that come from the consensus are saved to a global
-   * structure. */
-  /* Adaptive Padding state machines: these are immutable */
+  /** Adaptive Padding state machines: these are immutable. The state machines
+   *  that come from the consensus are saved to a global structure, to avoid
+   *  per-circuit allocations. */
   const circpad_machine_t *padding_machine[CIRCPAD_MAX_MACHINES];
 
-  /* Adaptive Padding machine info for above machines */
-  /* The histogram token state */
+  /** Adaptive Padding machine info for above machines. This is the
+   *  per-circuit mutable information, such as the current state and
+   *  histogram token counts. Some of it is optional (aka NULL). */
   circpad_machineinfo_t *padding_info[CIRCPAD_MAX_MACHINES];
-  /* Handles to safely access padding_info during callback */
+  /** Handles to safely access padding_info during callback */
   circpad_machineinfo_handle_t *padding_handles[CIRCPAD_MAX_MACHINES];
 };
 

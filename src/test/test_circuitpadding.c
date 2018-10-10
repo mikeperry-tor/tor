@@ -197,9 +197,6 @@ circuitmux_attach_circuit_mock(circuitmux_t *cmux, circuit_t *circ,
   return;
 }
 
-
-
-
 static int
 cpath_get_len(crypt_path_t *cpath_orig)
 {

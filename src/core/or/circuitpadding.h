@@ -17,8 +17,13 @@ typedef struct circuit_t circuit_t;
 typedef struct origin_circuit_t origin_circuit_t;
 typedef struct cell_t cell_t;
 
-/* High level: Each circuit has up to two state machines, and each state
-   machine consists of these states */
+/**
+ * Circpad state specifier.
+ *
+ * Each circuit has up to two state machines, and each state
+ * machine consists of these states. Machines transition between
+ * these states using the event transition specifiers below.
+ */
 typedef enum {
   CIRCPAD_STATE_START = 0,
   CIRCPAD_STATE_BURST = 1,
@@ -27,7 +32,6 @@ typedef enum {
 } circpad_statenum_t;
 #define CIRCPAD_NUM_STATES  ((uint8_t)CIRCPAD_STATE_END+1)
 
-/** You can move between the above states using these events below */
 /**
  * These constants form a bitfield to specify the types of events
  * that can cause transitions between state machine states.
@@ -47,44 +51,61 @@ typedef enum {
   CIRCPAD_TRANSITION_ON_BINS_EMPTY = 1<<5
 } circpad_transition_t;
 
+/**
+ * An infinite padding cell delay means don't schedule any padding --
+ * simply wait until a different event triggers a transition.
+ */
 #define CIRCPAD_DELAY_INFINITE  (UINT32_MAX)
 
-/** Token removal: When you see a regular cell at a particular time, you remove a token from hat delay XXX
-
-    Strategies for how to remove tokens:
-    - Should we remove from the higher bin
-    - From the lower bin
-    - Don't remove at all etc.
+/**
+ * Token removal strategy options.
+ *
+ * The WTF-PAD histograms are meant to specify a target distribution to shape
+ * traffic towards. This is accomplished by removing tokens from the histogram
+ * when either padding or non-padding cells are sent.
+ *
+ * When we see a non-padding cell at a particular time since the last cell, you
+ * remove a token from the corresponding delay bin. These flags specify
+ * which bin to choose if that bin is already empty.
  */
 typedef enum {
+  /** Don't remove any tokens */
   CIRCPAD_TOKEN_REMOVAL_NONE = 0,
+  /** Remove from the first non-zero higher bin index when current is zero. */
   CIRCPAD_TOKEN_REMOVAL_HIGHER = 1,
+  /** Remove from the first non-zero lower bin index when current is empty. */
   CIRCPAD_TOKEN_REMOVAL_LOWER = 2,
-  /* closest by index */
+  /** Remove from the closest non-zero lower bin index in either direction
+   *  when current is empty. */
   CIRCPAD_TOKEN_REMOVAL_CLOSEST = 3,
-  /* closest by time value */
+  /** Remove from the closest bin by time value (since bins are
+   *  exponentially spaced). */
   CIRCPAD_TOKEN_REMOVAL_CLOSEST_USEC = 4
 } circpad_removal_t;
 
-// 100 bytes is probably pretty close to the
-// "malloc overhead makes it not worth it" line
+/** The maximum length any histogram can be. */
 #define CIRCPAD_MAX_HISTOGRAM_LEN 50
 
 /**
+ * A circuit padding state machine state.
+ *
  * This struct describes the histograms and parameters of a single
- * state in the adaptive padding machine.
+ * state in the adaptive padding machine. Instances of this struct
+ * exist in global circpad machine definitions that come from torrc
+ * or the consensus, and are immutable.
  */
 typedef struct circpad_state_t {
-  /* how long the histogram is (in bins) */
+  /** how long the histogram is (in bins) */
   uint8_t histogram_len;
-  /* histogram itself: an array of uint16s of tokens */
+  /** histogram itself: an array of uint16s of tokens, whose
+   * widths are exponentially spaced, in microseconds */
   uint16_t histogram[CIRCPAD_MAX_HISTOGRAM_LEN];
-  /* total number of tokens */
+  /** total number of tokens */
   uint32_t histogram_total;
-  /* microseconds of the first bin of histogram */
+  /** microseconds of the first bin of histogram */
   uint32_t start_usec;
-  /* the time value of the last bin of the histogram.
-     so together they define the span of the delay */
+  /** the time value of the last bin of the histogram.
+      so together they define the span of the delay */
   uint16_t range_sec;
 
   /**
@@ -102,11 +123,12 @@ typedef struct circpad_state_t {
    * switch to the state corresponding to the index of the array.
    *
    * Example: If the bins are empty (CIRCPAD_TRANSITION_ON_BINS_EMPTY) and that
-   * bit is set in burst state, then transition to the burst state.
+   * bit is set in the burst state index, then transition to the burst state.
    */
   circpad_transition_t transition_events[CIRCPAD_NUM_STATES];
 
-  /* If true, estimate the RTT and use that for the histogram base instead of
+  /**
+   * If true, estimate the RTT and use that for the histogram base instead of
    * start_usec.
    *
    * Instead of hardcoding a start of the histogram, measure the round trip
@@ -116,18 +138,22 @@ typedef struct circpad_state_t {
    */
   uint8_t use_rtt_estimate;
 
-  /* If true, remove tokens from the histogram upon padding and
-   * non-padding activity. */
+  /** If true, remove tokens from the histogram upon padding and
+   * non-padding activity.
+   * XXX: Verify+clarify how this is different than token strategy NONE */
   circpad_removal_t token_removal;
 } circpad_state_t;
 
 /**
+ * Mutable padding machine info.
+ *
  * This structure contains mutable information about a padding
  * machine. The mutable information must be kept separate because
  * it exists per-circuit, where as the machines themselves are global.
  * This separation is done to conserve space in the circuit structure.
  *
- * This is the per-circuit state that changes regarding the global state machine
+ * This is the per-circuit state that changes regarding the global state
+ * machine. Some parts of it are optional (ie NULL).
  */
 typedef struct circpad_machineinfo_t {
   HANDLE_ENTRY(circpad_machineinfo, circpad_machineinfo_t);
@@ -144,9 +170,10 @@ typedef struct circpad_machineinfo_t {
    */
   uint64_t padding_was_scheduled_at_us;
 
-  /* A copy of the histogram for the current state. NULL if
-   * remove_tokens is false for that state */
+  /** A mutable copy of the histogram for the current state.
+   *  NULL if remove_tokens is false for that state */
   uint16_t *histogram;
+  /** Length of the above histogram */
   uint8_t histogram_len;
   /** Remove token from this index upon sending padding */
   uint8_t chosen_bin;
@@ -154,12 +181,16 @@ typedef struct circpad_machineinfo_t {
   /** What state is this machine in? */
   circpad_statenum_t current_state;
 
-  /* The last time we got an event relevant to estimating
+  /**
+   * The last time we got an event relevant to estimating
    * the RTT. Monotonic time in microseconds since system
    * start.
    */
   uint64_t last_rtt_packet_time_us;
 
+  /**
+   * EWMA estimate of the RTT of the circuit from this hop
+   * to the exit end. */
   uint32_t rtt_estimate;
 
   /**
@@ -168,6 +199,8 @@ typedef struct circpad_machineinfo_t {
    */
   uint8_t stop_rtt_update : 1;
 
+/** Max number of padding machines on each circuit. If changed,
+ * also ensure the machine_index bitwith supports the new size. */
 #define CIRCPAD_MAX_MACHINES    (2)
   /** Which padding machine index was this for.
    * (make sure changes to the bitwidth can support the
@@ -178,22 +211,31 @@ typedef struct circpad_machineinfo_t {
 
 HANDLE_DECL(circpad_machineinfo, circpad_machineinfo_t,);
 
-/** Helper macro to get an actual state machine from a machineinfo? */
+/** Helper macro to get an actual state machine from a machineinfo */
 #define CIRCPAD_GET_MACHINE(machineinfo) \
     ((machineinfo)->on_circ->padding_machine[(machineinfo)->machine_index])
 
 /** Global state machine structure from the consensus */
 typedef struct circpad_machine_t {
+  /** Transition to the burst state (from start) on the events that are set
+   *  in this bitfield */
   circpad_transition_t transition_burst_events;
+  /** Transition to the burst state (from start) on the events that are set
+   *  in this bitfield */
   circpad_transition_t transition_gap_events;
 
+  /** The burst state for this machine. XXX: Describe burst vs gap in terms
+   * of interpacket delay. */
   circpad_state_t burst;
+
+  /** The gap state. */
   circpad_state_t gap;
 
+  /** Non-zero if we've set up this machine */
   uint8_t is_initialized : 1;
 } circpad_machine_t;
 
-/** Final decision (just for unittest?) */
+/** Padding decision upon receiving an event. (Just for unittest) */
 typedef enum {
   CIRCPAD_WONTPAD_EVENT = 0,
   CIRCPAD_WONTPAD_CANCELED,
@@ -203,10 +245,9 @@ typedef enum {
   CIRCPAD_PADDING_SENT
 } circpad_decision_t;
 
-/* Events */
-
-/* There are 4 events. We should have 8 call sites, because we handle origin
-   and non-origin cases differently. */
+/**
+ * The following are event call-in points that are of interest to
+ * the state machines. They are called during cell processing. */
 void circpad_event_nonpadding_sent(circuit_t *on_circ);
 void circpad_event_nonpadding_received(circuit_t *on_circ);
 
@@ -227,9 +268,7 @@ void circpad_event_bins_empty(circpad_machineinfo_t *mi);
 typedef uint8_t circpad_machine_num_t;
 
 /* Toy state machines */
-
 /* They attach a state machine to a circuit */
-
 void circpad_circ_client_machine_setup(circuit_t *);
 void circpad_circ_responder_machine_setup(circuit_t *on_circ);
 
@@ -241,9 +280,11 @@ void circpad_hs_serv_rend_machine_setup(circuit_t *);
 
 void circpad_machines_free(circuit_t *circ);
 
+/** Serializaton functions for writing to/from torrc and consensus */
 char *circpad_machine_to_string(const circpad_machine_t *machine);
 const circpad_machine_t *circpad_string_to_machine(const char *str);
 
+/* Padding negotiation between client and middle */
 void circpad_event_padding_negotiate(circuit_t *circ, cell_t *cell);
 int circpad_negotiate_padding(origin_circuit_t *circ,
                               circpad_machine_num_t machine, int echo);
