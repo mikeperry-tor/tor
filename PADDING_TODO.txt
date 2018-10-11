@@ -26,7 +26,7 @@ TODO sketch for this branch, in rough priority order:
 
 - Check https://trac.torproject.org/projects/tor/ticket/25505 for
   more accurate event sources
-  - ??
+  - 0.5-1 day
 
 - Support torrc load+serialization of state machines
   - ??
