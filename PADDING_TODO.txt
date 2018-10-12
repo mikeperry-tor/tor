@@ -4,9 +4,13 @@ TODO sketch for this branch, in rough priority order:
 -- Switch from sending state machines to requesting a "menu option" of state
    machine.
 
-- Tests for variable hop padding send+receive
-
 - Clean up/fix XXX's and FIXMEs
+  - Generic start state code
+  - Factor out and saneify RTT calc code (and check circ build state, only
+    EWMA after built. Before just replace RTT.)
+  - Fix dup event callback from code review
+  - Check token removal: Should only remove toks on "send" events, not recv
+
 - DOCDOC functions
 
 - Allow padding on specific circuit purposes
