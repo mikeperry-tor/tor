@@ -279,11 +279,11 @@ test_circuitpadding_rtt(void *arg)
 
   /* Test 1: Test measuring RTT */
   circpad_event_nonpadding_received((circuit_t*)relay_side);
-  tt_int_op(relay_side->padding_info[0]->last_rtt_packet_time_us, OP_NE, 0);
+  tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_NE, 0);
 
   tor_sleep_msec(20);
   circpad_event_nonpadding_sent((circuit_t*)relay_side);
-  tt_int_op(relay_side->padding_info[0]->last_rtt_packet_time_us, OP_EQ, 0);
+  tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
   tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_GE, 19000);
   tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_LE, 30000);
@@ -292,11 +292,11 @@ test_circuitpadding_rtt(void *arg)
 
   circpad_event_nonpadding_received((circuit_t*)relay_side);
   circpad_event_nonpadding_received((circuit_t*)relay_side);
-  tt_int_op(relay_side->padding_info[0]->last_rtt_packet_time_us, OP_NE, 0);
+  tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_NE, 0);
   tor_sleep_msec(40);
   circpad_event_nonpadding_sent((circuit_t*)relay_side);
   circpad_event_nonpadding_sent((circuit_t*)relay_side);
-  tt_int_op(relay_side->padding_info[0]->last_rtt_packet_time_us, OP_EQ, 0);
+  tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
   tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_GE, 29000);
   tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_LE, 50000);
@@ -312,21 +312,20 @@ test_circuitpadding_rtt(void *arg)
   circpad_event_nonpadding_sent((circuit_t*)relay_side);
 
   tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_EQ, rtt_estimate);
-  tt_int_op(relay_side->padding_info[0]->last_rtt_packet_time_us, OP_EQ, 0);
+  tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
   tt_int_op(relay_side->padding_info[0]->stop_rtt_update, OP_EQ, 1);
   tt_int_op(circpad_histogram_bin_to_usec(relay_side->padding_info[0], 0),
             OP_EQ, relay_side->padding_info[0]->rtt_estimate);
 
   /* Test 3: Make sure client side machine properly ignores RTT */
   circpad_event_nonpadding_received((circuit_t*)client_side);
-  tt_int_op(client_side->padding_info[0]->last_rtt_packet_time_us, OP_NE, 0);
+  tt_int_op(client_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
   tor_sleep_msec(20);
   circpad_event_nonpadding_sent((circuit_t*)client_side);
-  tt_int_op(client_side->padding_info[0]->last_rtt_packet_time_us, OP_EQ, 0);
+  tt_int_op(client_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
-  tt_int_op(client_side->padding_info[0]->rtt_estimate, OP_GE, 19000);
-  tt_int_op(client_side->padding_info[0]->rtt_estimate, OP_LE, 30000);
+  tt_int_op(client_side->padding_info[0]->rtt_estimate, OP_EQ, 0);
   tt_int_op(circpad_histogram_bin_to_usec(client_side->padding_info[0], 0),
             OP_NE, client_side->padding_info[0]->rtt_estimate);
   tt_int_op(circpad_histogram_bin_to_usec(client_side->padding_info[0], 0),
