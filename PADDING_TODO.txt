@@ -5,12 +5,21 @@ TODO sketch for this branch, in rough priority order:
    machine.
 
 - Clean up/fix XXX's and FIXMEs
-  - Generic start state code
   - Add RTT to start_usec instead of using either/or.
-  - Fix dup event callback from code review
+  - Generic start state code
+  - Fix dup event callback from code review, verify sane event call-in
+    placement (ie vs circuitmux or other places from #25505)
   - Check token removal: Should only remove toks on "send" events, not recv
+  - Verify we're scheduling new padding in sane places
+  - Verify event ordering for events that the padding code emits to itself
+    (such as bins empty, padding sent, infinity, etc)
+  - Support multiple WTF-PAD machines per circuit/machine setup events
+  - Add tests for detecting padding from wrong hop
+  - Better test coverage in general
+  - Rephist timer stats
+  - DOCDOC functions
 
-- DOCDOC functions
+- Determine good hardcoded/example histograms
 
 - Allow padding on specific circuit purposes
   - 2 weeks
@@ -18,10 +27,6 @@ TODO sketch for this branch, in rough priority order:
 - Allow padding events to start/stop padding based on circuit
   construction state and stream usage and target circuit lifetime
   - 1 week
-
-- Check https://trac.torproject.org/projects/tor/ticket/25505 for
-  more accurate event sources
-  - 0.5-1 day
 
 - Support torrc load+serialization of state machines
   - ??
