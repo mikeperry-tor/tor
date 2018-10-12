@@ -1504,9 +1504,13 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
     }
   }
 
-  /* XXX we should be checking that we are something that should be receiving a
-     padding_negotiate. middle nodes receive this. */
   if (rh.command == RELAY_COMMAND_PADDING_NEGOTIATE) {
+    if (CIRCUIT_IS_ORIGIN(circ)) {
+      log_fn(LOG_PROTOCOL_WARN, LD_PROTOCOL,
+             "Padding negotiate cell unsupported at origin. Killing circ.");
+      return -END_CIRC_REASON_TORPROTOCOL;
+    }
+
     circpad_event_padding_negotiate(circ, cell);
 
     rep_hist_padding_count_read(PADDING_TYPE_DROP);
@@ -1515,6 +1519,15 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
   }
 
   if (rh.command == RELAY_COMMAND_DROP) {
+    if (CIRCUIT_IS_ORIGIN(circ)) {
+      if (circpad_padding_is_from_expected_hop(circ, layer_hint)) {
+        circuit_read_valid_data(TO_ORIGIN_CIRCUIT(circ), rh.length);
+      } else {
+        /* This is unexpected padding. Ignore it for now. */
+        return 0;
+      }
+    }
+
     rep_hist_padding_count_read(PADDING_TYPE_DROP);
     /* The cell should be recognized by now, which means that we are on the
        destination, which means that we received a padding cell. We might be

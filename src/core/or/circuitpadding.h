@@ -284,6 +284,9 @@ void circpad_hs_serv_rend_machine_setup(circuit_t *);
 
 void circpad_machines_free(circuit_t *circ);
 
+int circpad_padding_is_from_expected_hop(circuit_t *circ,
+                                         crypt_path_t *from_hop);
+
 /** Serializaton functions for writing to/from torrc and consensus */
 char *circpad_machine_to_string(const circpad_machine_t *machine);
 const circpad_machine_t *circpad_string_to_machine(const char *str);

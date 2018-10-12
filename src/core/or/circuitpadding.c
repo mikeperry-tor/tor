@@ -896,6 +896,37 @@ circpad_event_padding_negotiate(circuit_t *circ, cell_t *cell)
   circpad_negotiate_free(negotiate);
 }
 
+/**
+ * Verify that padding is coming from the expected hop.
+ *
+ * Returns true if from_hop matches the target hop from
+ * one of our padding machines.
+ *
+ * Returns false if we're not an origin circuit, or if from_hop
+ * does not match one of the padding machines.
+ */
+int
+circpad_padding_is_from_expected_hop(circuit_t *circ,
+                                     crypt_path_t *from_hop)
+{
+  crypt_path_t *target_hop = NULL;
+  if (!CIRCUIT_IS_ORIGIN(circ))
+    return 0;
+
+  for (int i = 0; i < CIRCPAD_MAX_MACHINES; i++) {
+    if (!circ->padding_machine[i])
+      continue;
+
+    target_hop = circuit_get_cpath_hop(TO_ORIGIN_CIRCUIT(circ),
+                    circ->padding_machine[i]->target_hopnum);
+
+    if (target_hop == from_hop)
+      return 1;
+  }
+
+  return 0;
+}
+
 void
 circpad_machines_free(circuit_t *circ)
 {
