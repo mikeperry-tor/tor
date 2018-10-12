@@ -4,20 +4,12 @@ TODO sketch for this branch, in rough priority order:
 -- Switch from sending state machines to requesting a "menu option" of state
    machine.
 
-- Chutney
-
-- Fix Leaky Crypto
-  - 1 week?
+- Tests for variable hop padding send+receive
 
 - Clean up/fix XXX's and FIXMEs
-
-- Verify padding comes from correct hop for dropped cell accounting:
-  https://trac.torproject.org/projects/tor/ticket/25501
-  - 3 days
-
 - DOCDOC functions
 
-- Allow padding on specific circuit purposes and to specific hops
+- Allow padding on specific circuit purposes
   - 2 weeks
 
 - Allow padding events to start/stop padding based on circuit

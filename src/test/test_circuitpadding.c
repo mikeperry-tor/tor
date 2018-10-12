@@ -179,7 +179,6 @@ static int
 circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
                            crypt_path_t *layer_hint, streamid_t on_stream,
-                           int custom_cpath,
                            const char *filename, int lineno);
 
 static void
@@ -201,14 +200,14 @@ static int
 circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
                            crypt_path_t *layer_hint, streamid_t on_stream,
-                           int custom_cpath,
                            const char *filename, int lineno) {
   (void)cell; (void)on_stream; (void)filename; (void)lineno;
-  (void)custom_cpath;
 
   if (circ == client_side) {
+    int is_target_hop = circpad_padding_is_from_expected_hop(circ,
+                                                             layer_hint);
     tt_int_op(cell_direction, OP_EQ, CELL_DIRECTION_OUT);
-    tt_ptr_op(layer_hint, OP_EQ, TO_ORIGIN_CIRCUIT(circ)->cpath->next);
+    tt_int_op(is_target_hop, OP_EQ, 1);
 
     fprintf(stderr, "Client padded\n");
     // Pretend a padding cell was sent
