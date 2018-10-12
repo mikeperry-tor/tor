@@ -28,11 +28,6 @@ HANDLE_IMPL(circpad_machineinfo, circpad_machineinfo_t,);
 
 #define USEC_PER_SEC (1000000)
 
-/**
- * For now, always pad to second hop.
- * XXX: This should be part of the machine definition */
-#define CIRCPAD_TARGET_HOP 2
-
 void circpad_machine_remove_token(circpad_machineinfo_t *mi);
 void circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi);
 circpad_decision_t circpad_machine_schedule_padding(circpad_machineinfo_t *mi);
@@ -556,7 +551,7 @@ circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi)
 
   if (CIRCUIT_IS_ORIGIN(mi->on_circ)) {
     circpad_send_command_to_hop(TO_ORIGIN_CIRCUIT(mi->on_circ),
-                                CIRCPAD_TARGET_HOP,
+                                CIRCPAD_GET_MACHINE(mi)->target_hopnum,
                                 RELAY_COMMAND_DROP, NULL, 0);
   } else {
     // If we're a non-origin circ, we can just send from here as if we're the
@@ -972,6 +967,8 @@ circpad_circ_client_machine_setup(circuit_t *on_circ)
   if (circ_client_machine.is_initialized)
     return;
 
+  circ_client_machine.target_hopnum = 2;
+
   circ_client_machine.transition_burst_events =
     CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
 
@@ -1022,6 +1019,10 @@ circpad_circ_responder_machine_setup(circuit_t *on_circ)
 
   if (circ_responder_machine.is_initialized)
     return;
+
+  /* The relay-side doesn't care what hopnum it is, but for consistency,
+   * let's match the client */
+  circ_client_machine.target_hopnum = 2;
 
   /* XXX check if we need to setup token_removal */
 
@@ -1154,6 +1155,7 @@ circpad_negotiate_padding(origin_circuit_t *circ,
   // If we have a padding machine, we already did this.
   /* This check prevents us from making a new machine for every cell.
    * XXX: Maybe this means we need better event differentiation? */
+  // XXX: What about more than one machine?
   if (TO_CIRCUIT(circ)->padding_machine[0]) {
     return 1;
   }
@@ -1196,7 +1198,9 @@ circpad_negotiate_padding(origin_circuit_t *circ,
       break;
   }
 
-  return circpad_send_command_to_hop(circ, CIRCPAD_TARGET_HOP,
+  return circpad_send_command_to_hop(circ,
+                                     TO_CIRCUIT(circ)->
+                                       padding_machine[0]->target_hopnum,
                                      RELAY_COMMAND_PADDING_NEGOTIATE,
                                      cell.payload, len) == 0;
 }

@@ -231,6 +231,10 @@ typedef struct circpad_machine_t {
   /** The gap state. */
   circpad_state_t gap;
 
+  /** Which hop in the circuit should we send padding to/from?
+   *  1-indexed (ie: hop #1 is guard, #2 middle, #3 exit). */
+  uint8_t target_hopnum;
+
   /** Non-zero if we've set up this machine */
   uint8_t is_initialized : 1;
 } circpad_machine_t;
