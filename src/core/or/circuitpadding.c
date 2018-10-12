@@ -709,12 +709,119 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
   return CIRCPAD_WONTPAD_EVENT;
 }
 
+/**
+ * Estimate the circuit RTT from the current middle hop out to the
+ * end of the circuit.
+ *
+ * We estimate RTT by calculating the time between "receive" and
+ * "send" at a middle hop. This is because we "receive" a cell
+ * from the origin, and then relay it towards the exit before a
+ * response comes back. It is that response time from the exit side
+ * that we want to measure, so that we can make use of it for synthetic
+ * response delays.
+ */
+static void
+circpad_estimate_circ_rtt_on_received(circuit_t *circ,
+                                      circpad_machineinfo_t *mi)
+{
+  /* Origin circuits don't estimate RTT. They could do it easily enough,
+   * but they have no reason to use it in any delay calculations. */
+  if (CIRCUIT_IS_ORIGIN(circ) || mi->stop_rtt_update)
+    return;
+
+  /* If we already have a last receieved packet time, that means we
+   * did not get a response before this packet. The RTT estimate
+   * only makes sense if we do not have multiple packets on the
+   * wire, so stop estimating if this is the second packet
+   * back to back. However, for the first set of back-to-back
+   * packets, we can wait until the very first response comes back
+   * to us, to measure that RTT (for the response to optimistic
+   * data, for example). Hence stop_rtt_update is only checked
+   * in this received side function, and not in send side below.
+   */
+  if (mi->last_received_time_us) {
+    /* We also allow multiple back-to-back packets if the circuit is not
+     * opened, to handle var cells */
+    if (circ->state == CIRCUIT_STATE_OPEN) {
+      log_fn(LOG_INFO, LD_CIRC,
+           "Stopping padding RTT estimation on circuit (%"PRIu64
+           ", %d) after two back to back packets. Current RTT: %d",
+           circ->n_chan ?  circ->n_chan->global_identifier : 0,
+           circ->n_circ_id, mi->rtt_estimate);
+       mi->stop_rtt_update = 1;
+    }
+  } else {
+    mi->last_received_time_us = monotime_absolute_usec();
+  }
+}
+
+/**
+ * Handles the "send" side of RTT calculation at middle nodes.
+ *
+ * This function calculates the RTT from the middle to the end
+ * of the circuit by subtracting the last received cell timestamp
+ * from the current time. It allows back-to-back cells until
+ * the circuit is opened, to allow for var cell handshakes.
+ */
+static void
+circpad_estimate_circ_rtt_on_send(circuit_t *circ,
+                                  circpad_machineinfo_t *mi)
+{
+  /* Origin circuits don't estimate RTT. They could do it easily enough,
+   * but they have no reason to use it in any delay calculations. */
+  if (CIRCUIT_IS_ORIGIN(circ))
+    return;
+
+  /* If last_received_time_us is non-zero, we are waiting for a response
+   * from the exit side. Calculate the time delta and use it as RTT. */
+  if (mi->last_received_time_us) {
+    uint64_t rtt_time = monotime_absolute_usec() -
+        mi->last_received_time_us;
+
+    /* Reset the last RTT packet time, so we can tell if two cells
+     * arrive back to back */
+    mi->last_received_time_us = 0;
+
+    /* Use INT32_MAX to ensure the addition doesn't overflow */
+    if (rtt_time >= INT32_MAX) {
+      log_fn(LOG_WARN,LD_CIRC,
+             "Circuit padding RTT estimate overflowed: %"PRIu64
+             " vs %"PRIu64, monotime_absolute_usec(),
+               mi->last_received_time_us);
+      return;
+    }
+
+    /* If the circuit is opened and we have an RTT estimate, update
+     * via an EWMA. */
+    if (circ->state == CIRCUIT_STATE_OPEN && mi->rtt_estimate) {
+      mi->rtt_estimate += (uint32_t)rtt_time;
+      mi->rtt_estimate /= 2;
+    } else {
+      /* If the circuit is not opened yet, just replace the estimate */
+      mi->rtt_estimate = (uint32_t)rtt_time;
+    }
+  } else if (circ->state == CIRCUIT_STATE_OPEN) {
+    /* If last_received_time_us is zero, then we have gotten two cells back
+     * to back. Stop estimating RTT in this case. Note that we only
+     * stop RTT update if the circuit is opened, to allow for RTT estimates
+     * of var cells during circ setup. */
+    mi->stop_rtt_update = 1;
+
+    if (!mi->rtt_estimate) {
+      log_fn(LOG_NOTICE, LD_CIRC,
+             "Got two cells back to back on a circuit before estimating RTT.");
+    }
+  }
+}
+
 void
 circpad_event_nonpadding_sent(circuit_t *on_circ)
 {
   /* If there are no machines then this loop should not iterate */
   for (int i = 0; i < CIRCPAD_MAX_MACHINES && on_circ->padding_info[i];
        i++) {
+    /* First, update any RTT estimate */
+    circpad_estimate_circ_rtt_on_send(on_circ, on_circ->padding_info[i]);
 
     /* Remove a token: this is the idea of adaptive padding, since we have an
        ideal distribution that we want our distribution to look like */
@@ -722,36 +829,6 @@ circpad_event_nonpadding_sent(circuit_t *on_circ)
 
     circpad_machine_transition(on_circ->padding_info[i],
                                CIRCPAD_TRANSITION_ON_NONPADDING_SENT);
-
-    /* Round trip time estimate (only valid for relay-side machines) */
-    // FIXME: Should we also stop estimating RTT if we get two "sends"
-    // back-to-back from a relay? Or a "send" without a "received"?
-    /* nuts */
-    if (on_circ->padding_info[i]->last_rtt_packet_time_us) {
-      uint64_t rtt_time = monotime_absolute_usec() -
-          on_circ->padding_info[i]->last_rtt_packet_time_us;
-
-      /* Reset the last RTT packet time, so we can tell if two
-       * arrive back to back */
-      on_circ->padding_info[i]->last_rtt_packet_time_us = 0;
-
-      /* Use INT32_MAX to ensure the addition doesn't overflow */
-      if (rtt_time >= INT32_MAX) {
-        log_fn(LOG_WARN,LD_CIRC,
-               "Circuit padding RTT estimate overflowed: %"PRIu64
-               " vs %"PRIu64, monotime_absolute_usec(),
-                 on_circ->padding_info[i]->last_rtt_packet_time_us);
-        continue;
-      }
-
-      /* Cheap EWMA */
-      if (on_circ->padding_info[i]->rtt_estimate) {
-        on_circ->padding_info[i]->rtt_estimate += (uint32_t)rtt_time;
-        on_circ->padding_info[i]->rtt_estimate /= 2;
-      } else {
-        on_circ->padding_info[i]->rtt_estimate = (uint32_t)rtt_time;
-      }
-    }
   }
 }
 
@@ -760,31 +837,11 @@ circpad_event_nonpadding_received(circuit_t *on_circ)
 {
   for (int i = 0; i < CIRCPAD_MAX_MACHINES && on_circ->padding_info[i];
       i++) {
+    /* First, update any RTT estimate */
+    circpad_estimate_circ_rtt_on_received(on_circ, on_circ->padding_info[i]);
+
     circpad_machine_transition(on_circ->padding_info[i],
                                CIRCPAD_TRANSITION_ON_NONPADDING_RECV);
-
-    /* If we already have a last RTT packet time, that means we
-     * did not get a response before this packet. The RTT estimate
-     * only makes sense if we do not have multiple packets on the
-     * wire, so stop estimating if this is the second packet
-     * back to back. However, for the first set of back-to-back
-     * packets, we can wait until the very first one comes back
-     * to us, to measure that RTT (for the response to optimistic
-     * data, for example).
-     */
-    if (on_circ->padding_info[i]->last_rtt_packet_time_us &&
-        !on_circ->padding_info[i]->stop_rtt_update) {
-      // FIXME: Safelog?
-      log_fn(LOG_INFO, LD_CIRC,
-             "Stopping padding RTT estimation on circuit (%"PRIu64
-             ", %d) after two back to back packets. Current RTT: %d",
-             on_circ->n_chan ?  on_circ->n_chan->global_identifier : 0,
-             on_circ->n_circ_id, on_circ->padding_info[i]->rtt_estimate);
-      on_circ->padding_info[i]->stop_rtt_update = 1;
-    } else if (!on_circ->padding_info[i]->stop_rtt_update) {
-      on_circ->padding_info[i]->last_rtt_packet_time_us
-          = monotime_absolute_usec();
-    }
   }
 }
 
@@ -1051,7 +1108,8 @@ circpad_circ_responder_machine_setup(circuit_t *on_circ)
   circ_responder_machine.burst.use_rtt_estimate = 1;
   /* The histogram is 1 bin */
   circ_responder_machine.burst.histogram_len = 1;
-  /* XXX this can be removed since we use use_rtt_estimate */
+  /* XXX this can be removed since we use use_rtt_estimate.. Or: allow to
+   * specify both, and add them together. */
   circ_responder_machine.burst.start_usec = 5000;
   circ_responder_machine.burst.range_sec = 10;
   /* During burst state we wait forever for padding to arrive.

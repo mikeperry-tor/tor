@@ -186,7 +186,7 @@ typedef struct circpad_machineinfo_t {
    * the RTT. Monotonic time in microseconds since system
    * start.
    */
-  uint64_t last_rtt_packet_time_us;
+  uint64_t last_received_time_us;
 
   /**
    * EWMA estimate of the RTT of the circuit from this hop
