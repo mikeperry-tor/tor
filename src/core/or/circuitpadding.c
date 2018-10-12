@@ -461,63 +461,31 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
   }
 }
 
-static crypt_path_t *
-cpath_layer_for_hopnum(origin_circuit_t *circ,
-                       int hopnum)
-{
-  int circ_len = circuit_get_cpath_len(circ);
-  crypt_path_t *target = circ->cpath;
-
-  /* Check that we have at least a 2 hop circuit */
-  if (circ_len < hopnum) {
-    log_fn(LOG_WARN,LD_CIRC,
-           "Padding circuit %u has %d hops, not %d",
-           circ->global_identifier, circ_len, hopnum);
-    return NULL;
-  }
-
-  if (target->state != CPATH_STATE_OPEN) {
-    log_fn(LOG_WARN,LD_CIRC,
-           "Padding circuit %u hop %d/%d is not opened yet, "
-           "but we're trying to send to hop %d",
-           circ->global_identifier, 1, circ_len, hopnum);
-    return NULL;
-  }
-
-  /* The first hop is hopnum 1, not 0. Hence start at i=1. */
-  for (int i = 1; i < hopnum; i++) {
-    target = target->next;
-
-    if (target == circ->cpath) {
-      /* This should not happen because of check above */
-      log_fn(LOG_WARN,LD_CIRC,
-             "Padding circuit %u wraps at hop %d/%d, before %d",
-             circ->global_identifier, i, circ_len, hopnum);
-      return NULL;
-    }
-
-    if (target->state != CPATH_STATE_OPEN) {
-      log_fn(LOG_WARN,LD_CIRC,
-             "Padding circuit %u hop %d/%d is not opened yet, "
-             "but we're trying to send to hop %d",
-             circ->global_identifier, i, circ_len, hopnum);
-      return NULL;
-    }
-  }
-
-  return target;
-}
-
 static int
 circpad_send_command_to_hop(origin_circuit_t *circ, int hopnum,
                             uint8_t relay_command, const uint8_t *payload,
                             ssize_t payload_len)
 {
-  crypt_path_t *target_hop = cpath_layer_for_hopnum(circ, hopnum);
+  crypt_path_t *target_hop = circuit_get_cpath_hop(circ, hopnum);
   int ret;
 
-  if (!target_hop)
+  /* Check that the cpath has the target hop */
+  if (!target_hop) {
+    log_fn(LOG_WARN,LD_CIRC,
+           "Padding circuit %u has %d hops, not %d",
+           circ->global_identifier,
+           circuit_get_cpath_len(circ), hopnum);
     return -1;
+  }
+
+  /* Check that enough hops are opened. */
+  if (circuit_get_cpath_opened_len(circ) < hopnum) {
+    log_fn(LOG_WARN,LD_CIRC,
+           "Padding circuit %u has %d hops, not %d",
+           circ->global_identifier,
+           circuit_get_cpath_opened_len(circ), hopnum);
+    return -1;
+  }
 
   log_fn(LOG_INFO,LD_CIRC, "Negotiating padding on circuit %u.",
           circ->global_identifier);
