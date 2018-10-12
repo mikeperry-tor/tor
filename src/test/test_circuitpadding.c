@@ -198,18 +198,6 @@ circuitmux_attach_circuit_mock(circuitmux_t *cmux, circuit_t *circ,
 }
 
 static int
-cpath_get_len(crypt_path_t *cpath_orig)
-{
-  crypt_path_t *cpath, *cpath_next = NULL;
-  int n = 0;
-  for (cpath = cpath_orig; cpath_next != cpath_orig; cpath = cpath_next) {
-    cpath_next = cpath->next;
-    ++n;
-  }
-  return n;
-}
-
-static int
 circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
                            crypt_path_t *layer_hint, streamid_t on_stream,
@@ -220,8 +208,7 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
 
   if (circ == client_side) {
     tt_int_op(cell_direction, OP_EQ, CELL_DIRECTION_OUT);
-    tt_ptr_op(layer_hint, OP_NE, TO_ORIGIN_CIRCUIT(circ)->cpath->prev);
-    tt_int_op(cpath_get_len(layer_hint), OP_EQ, 2);
+    tt_ptr_op(layer_hint, OP_EQ, TO_ORIGIN_CIRCUIT(circ)->cpath->next);
 
     fprintf(stderr, "Client padded\n");
     // Pretend a padding cell was sent

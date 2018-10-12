@@ -28,6 +28,11 @@ HANDLE_IMPL(circpad_machineinfo, circpad_machineinfo_t,);
 
 #define USEC_PER_SEC (1000000)
 
+/**
+ * For now, always pad to second hop.
+ * XXX: This should be part of the machine definition */
+#define CIRCPAD_TARGET_HOP 2
+
 void circpad_machine_remove_token(circpad_machineinfo_t *mi);
 void circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi);
 circpad_decision_t circpad_machine_schedule_padding(circpad_machineinfo_t *mi);
@@ -462,61 +467,50 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
 }
 
 static crypt_path_t *
-cpath_clone_shallow(crypt_path_t *cpath, int hops)
+cpath_layer_for_hopnum(origin_circuit_t *circ,
+                       int hopnum)
 {
-  crypt_path_t *new_head = NULL;
-  crypt_path_t *new_prev = NULL;
-  crypt_path_t *new_curr = NULL;
-  crypt_path_t *orig_iter = cpath;
-  int i;
+  int circ_len = circuit_get_cpath_len(circ);
+  crypt_path_t *target = circ->cpath;
 
-  for (i = 0; i < hops; i++) {
-    new_curr = tor_malloc_zero(sizeof(crypt_path_t));
-    new_curr->magic = CRYPT_PATH_MAGIC;
+  /* Check that we have at least a 2 hop circuit */
+  if (circ_len < hopnum) {
+    log_fn(LOG_WARN,LD_CIRC,
+           "Padding circuit %u has %d hops, not %d",
+           circ->global_identifier, circ_len, hopnum);
+    return NULL;
+  }
 
-    memcpy(new_curr, orig_iter, sizeof(crypt_path_t));
-    new_curr->prev = new_prev;
+  if (target->state != CPATH_STATE_OPEN) {
+    log_fn(LOG_WARN,LD_CIRC,
+           "Padding circuit %u hop %d/%d is not opened yet, "
+           "but we're trying to send to hop %d",
+           circ->global_identifier, 1, circ_len, hopnum);
+    return NULL;
+  }
 
-    if (new_prev) {
-      new_prev->next = new_curr;
-    } else {
-      /* head is null */
-      new_head = new_curr;
+  /* The first hop is hopnum 1, not 0. Hence start at i=1. */
+  for (int i = 1; i < hopnum; i++) {
+    target = target->next;
+
+    if (target == circ->cpath) {
+      /* This should not happen because of check above */
+      log_fn(LOG_WARN,LD_CIRC,
+             "Padding circuit %u wraps at hop %d/%d, before %d",
+             circ->global_identifier, i, circ_len, hopnum);
+      return NULL;
     }
 
-    new_prev = new_curr;
-    orig_iter = orig_iter->next;
-
-    // Did we wrap around?
-    if (orig_iter == cpath)
-      break;
+    if (target->state != CPATH_STATE_OPEN) {
+      log_fn(LOG_WARN,LD_CIRC,
+             "Padding circuit %u hop %d/%d is not opened yet, "
+             "but we're trying to send to hop %d",
+             circ->global_identifier, i, circ_len, hopnum);
+      return NULL;
+    }
   }
 
-  new_curr->next = new_head;
-  new_head->prev = new_curr;
-
-  if (orig_iter == cpath && i == 0) {
-    log_fn(LOG_WARN,LD_CIRC,
-           "Trying to do padding on short (one-hop) circuit!");
-    BUG(i == 0);
-  }
-
-  return new_head;
-}
-
-static void
-cpath_free_shallow(crypt_path_t *cpath)
-{
-  crypt_path_t *iter = cpath;
-  crypt_path_t *next;
-
-  if (!cpath) return;
-
-  do {
-    next = iter->next;
-    tor_free(iter);
-    iter = next;
-  } while (iter != cpath);
+  return target;
 }
 
 static int
@@ -524,33 +518,11 @@ circpad_send_command_to_hop(origin_circuit_t *circ, int hopnum,
                             uint8_t relay_command, const uint8_t *payload,
                             ssize_t payload_len)
 {
-  crypt_path_t *new_cpath;
+  crypt_path_t *target_hop = cpath_layer_for_hopnum(circ, hopnum);
   int ret;
 
-  // Check that we have at least a 2 hop circuit
-  if (circuit_get_cpath_len(circ) < hopnum) {
-    log_fn(LOG_WARN,LD_CIRC,
-           "Padding circuit %u has %d hops, not %d",
-           circ->global_identifier,
-           circuit_get_cpath_len(circ), hopnum);
+  if (!target_hop)
     return -1;
-  }
-
-  /* Prepare a cpath to get us to the middle hop */
-  new_cpath = cpath_clone_shallow(circ->cpath, hopnum);
-
-  // Ensure that our cpath is not short, and we have both hops are open
-  // FIXME-MP-AP: move this check into clone? But then it needs to generalize
-  // to more than 2 hops..
-  if (!new_cpath || new_cpath == new_cpath->next ||
-      new_cpath->state != CPATH_STATE_OPEN ||
-      new_cpath->next->state != CPATH_STATE_OPEN) {
-    log_fn(LOG_WARN,LD_CIRC,
-           "Padding command on circuit %u without two opened hops.",
-           circ->global_identifier);
-    cpath_free_shallow(new_cpath);
-    return -1;
-  }
 
   log_fn(LOG_INFO,LD_CIRC, "Negotiating padding on circuit %u.",
           circ->global_identifier);
@@ -558,10 +530,7 @@ circpad_send_command_to_hop(origin_circuit_t *circ, int hopnum,
   /* Send the drop command to the second hop */
   ret = relay_send_command_from_edge(0, TO_CIRCUIT(circ), relay_command,
                                      (const char*)payload, payload_len,
-                                     new_cpath);
-
-  cpath_free_shallow(new_cpath);
-
+                                     target_hop);
   return ret;
 }
 
@@ -586,7 +555,8 @@ circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi)
   log_fn(LOG_INFO,LD_CIRC, "Padding callback. Sending.");
 
   if (CIRCUIT_IS_ORIGIN(mi->on_circ)) {
-    circpad_send_command_to_hop(TO_ORIGIN_CIRCUIT(mi->on_circ), 2,
+    circpad_send_command_to_hop(TO_ORIGIN_CIRCUIT(mi->on_circ),
+                                CIRCPAD_TARGET_HOP,
                                 RELAY_COMMAND_DROP, NULL, 0);
   } else {
     // If we're a non-origin circ, we can just send from here as if we're the
@@ -1226,7 +1196,8 @@ circpad_negotiate_padding(origin_circuit_t *circ,
       break;
   }
 
-  return circpad_send_command_to_hop(circ, 2, RELAY_COMMAND_PADDING_NEGOTIATE,
+  return circpad_send_command_to_hop(circ, CIRCPAD_TARGET_HOP,
+                                     RELAY_COMMAND_PADDING_NEGOTIATE,
                                      cell.payload, len) == 0;
 }
 
