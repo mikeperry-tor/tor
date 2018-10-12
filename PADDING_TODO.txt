@@ -6,8 +6,7 @@ TODO sketch for this branch, in rough priority order:
 
 - Clean up/fix XXX's and FIXMEs
   - Generic start state code
-  - Factor out and saneify RTT calc code (and check circ build state, only
-    EWMA after built. Before just replace RTT.)
+  - Add RTT to start_usec instead of using either/or.
   - Fix dup event callback from code review
   - Check token removal: Should only remove toks on "send" events, not recv
 
