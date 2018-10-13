@@ -5,7 +5,6 @@ TODO sketch for this branch, in rough priority order:
    machine.
 
 - Clean up/fix XXX's and FIXMEs
-  - Add RTT to start_usec instead of using either/or.
   - Generic start state code
   - Fix dup event callback from code review, verify sane event call-in
     placement (ie vs circuitmux or other places from #25505)
@@ -17,7 +16,6 @@ TODO sketch for this branch, in rough priority order:
   - Add tests for detecting padding from wrong hop
   - Better test coverage in general
   - Rephist timer stats
-  - DOCDOC functions
 
 - Determine good hardcoded/example histograms
 
@@ -27,6 +25,8 @@ TODO sketch for this branch, in rough priority order:
 - Allow padding events to start/stop padding based on circuit
   construction state and stream usage and target circuit lifetime
   - 1 week
+
+- Different termination condition instead of Infinity bin?
 
 - Support torrc load+serialization of state machines
   - ??
