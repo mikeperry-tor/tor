@@ -133,11 +133,10 @@ typedef struct circpad_state_t {
    *
    * Right now this is only supported for relay-side state machines.
    */
-  uint8_t use_rtt_estimate;
+  uint8_t use_rtt_estimate : 1;
 
-  /** If true, remove tokens from the histogram upon padding and
-   * non-padding activity.
-   * XXX: Verify+clarify how this is different than token strategy NONE */
+  /** This specifies the token removal strategy to use upon padding and
+   *  non-padding activity. */
   circpad_removal_t token_removal;
 } circpad_state_t;
 

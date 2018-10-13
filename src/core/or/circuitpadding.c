@@ -51,7 +51,10 @@ void circpad_machine_remove_closest_token(circpad_machineinfo_t *mi,
                                           int use_usec);
 STATIC void circpad_machine_setup_tokens(circpad_machineinfo_t *mi);
 
-/* Histogram helpers */
+/**
+ * Return the circpad_stat_t for the current state based on the
+ * mutable info.
+ */
 STATIC const circpad_state_t *
 circpad_machine_current_state(circpad_machineinfo_t *machine)
 {
@@ -119,8 +122,9 @@ circpad_histogram_usec_to_bin(circpad_machineinfo_t *mi, uint32_t us)
   bin = state->histogram_len -
     tor_log2((state->range_sec*USEC_PER_SEC)/(us-start_usec+1))-1;
 
+  /* Clamp the return value to account for timevals before the start
+   * of bin 0, or after the last bin */
   if (bin >= state->histogram_len || bin < 0) {
-    // XXX: Log, but only if less than 0. > histogram_len can happen..
     bin = MIN(MAX(bin, 0), state->histogram_len-1);
   }
   return bin;
@@ -159,6 +163,13 @@ circpad_machine_setup_tokens(circpad_machineinfo_t *mi)
          sizeof(uint16_t)*state->histogram_len);
 }
 
+/**
+ * Sample an expected time-until-next-packet delay from the histogram.
+ *
+ * The bin is chosen with probability proportional to the number
+ * of tokens in each bin, and then a time value is chosen uniformly from
+ * that bin's [start,end) time range.
+ */
 static uint32_t
 circpad_machine_sample_delay(circpad_machineinfo_t *mi)
 {
@@ -280,6 +291,10 @@ circpad_machine_first_lower_index(circpad_machineinfo_t *mi,
   return -1;
 }
 
+/**
+ * Remove a token from the first non-empty bin whose upper bound is
+ * greater than the target.
+ */
 void
 circpad_machine_remove_higher_token(circpad_machineinfo_t *mi,
                                     uint64_t target_bin_us)
@@ -297,6 +312,10 @@ circpad_machine_remove_higher_token(circpad_machineinfo_t *mi,
   }
 }
 
+/**
+ * Remove a token from the first non-empty bin whose upper bound is
+ * lower than the target.
+ */
 void
 circpad_machine_remove_lower_token(circpad_machineinfo_t *mi,
                                    uint64_t target_bin_us)
@@ -321,6 +340,12 @@ circpad_machine_remove_lower_token(circpad_machineinfo_t *mi,
   }
 }
 
+/**
+ * Remove a token from the closest non-empty bin to the target.
+ *
+ * If use_usec is true, measure "closest" in terms of bin start usec.
+ * If it is false, use bin index distance only.
+ */
 void
 circpad_machine_remove_closest_token(circpad_machineinfo_t *mi,
                                      uint64_t target_bin_us,
@@ -399,11 +424,10 @@ circpad_machine_remove_closest_token(circpad_machineinfo_t *mi,
   }
 }
 
-/* Remove a token from the bin corresponding to the delta since
- * last packet, or the next greater bin */
-// TODO-MP-AP: remove from lower bin? lowest bin? closest bin?
-// FIXME-MP-AP: Hidden service circuit machine may need both...
-//   - XXX: Damnit, I forget why that was the case. Blah.
+/**
+ * Remove a token from the bin corresponding to the delta since
+ * last packet. If that bin is empty, choose a token based on
+ * the specified removal strategy in the state machine. */
 void
 circpad_machine_remove_token(circpad_machineinfo_t *mi)
 {
@@ -461,6 +485,16 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
   }
 }
 
+/**
+ * Send a relay command with a relay cell payload on a circuit to
+ * the particular hopnum.
+ *
+ * Hopnum starts at 1 (1=guard, 2=middle, 3=exit, etc).
+ *
+ * Payload may be null.
+ *
+ * Returns negative on error, 0 on success.
+ */
 static int
 circpad_send_command_to_hop(origin_circuit_t *circ, int hopnum,
                             uint8_t relay_command, const uint8_t *payload,
@@ -497,6 +531,14 @@ circpad_send_command_to_hop(origin_circuit_t *circ, int hopnum,
   return ret;
 }
 
+/**
+ * Callback helper to send a padding cell.
+ *
+ * This helper is called after our histogram-sampled delay period passes
+ * without another packet being sent first. If a packet is sent before this
+ * callback happens, it is canceled. So when we're called here, send padding
+ * right away.
+ */
 void
 circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi)
 {
@@ -543,6 +585,12 @@ circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi)
   }
 }
 
+/**
+ * Tor-timer compatible callback that tells us to send a padding cell.
+ *
+ * Conver the handle to a pointer; do some basic sanity checks, then
+ * send appropriate data to the callback helper to send the cell.
+ */
 static void
 circpad_send_padding_callback(tor_timer_t *timer, void *args,
                               const struct monotime_t *time)
@@ -644,6 +692,12 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
   return CIRCPAD_PADDING_SCHEDULED;
 }
 
+/**
+ * Generic state transition function for padding state machines.
+ *
+ * Given an event and our mutable machine info, decide if/how to
+ * transition to a different state, and perform actions accordingly.
+ */
 circpad_decision_t
 circpad_machine_transition(circpad_machineinfo_t *mi,
                            circpad_transition_t event)
@@ -814,6 +868,14 @@ circpad_estimate_circ_rtt_on_send(circuit_t *circ,
   }
 }
 
+/**
+ * A "non-padding" cell has been sent from this endpoint. React
+ * according to any padding state machines on the circuit.
+ *
+ * For origin circuits, this means we sent a cell into the network.
+ * For middle relay circuits, this means we sent a cell towards the
+ * origin.
+ */
 void
 circpad_event_nonpadding_sent(circuit_t *on_circ)
 {
@@ -832,6 +894,14 @@ circpad_event_nonpadding_sent(circuit_t *on_circ)
   }
 }
 
+/**
+ * A "non-padding" cell has been received by this endpoint. React
+ * according to any padding state machines on the circuit.
+ *
+ * For origin circuits, this means we read a cell from the network.
+ * For middle relay circuits, this means we received a cell from the
+ * origin.
+ */
 void
 circpad_event_nonpadding_received(circuit_t *on_circ)
 {
@@ -845,6 +915,14 @@ circpad_event_nonpadding_received(circuit_t *on_circ)
   }
 }
 
+/**
+ * A padding cell has been sent from this endpoint. React
+ * according to any padding state machines on the circuit.
+ *
+ * For origin circuits, this means we sent a cell into the network.
+ * For middle relay circuits, this means we sent a cell towards the
+ * origin.
+ */
 void
 circpad_event_padding_sent(circuit_t *on_circ)
 {
@@ -855,6 +933,14 @@ circpad_event_padding_sent(circuit_t *on_circ)
   }
 }
 
+/**
+ * A padding cell has been received by this endpoint. React
+ * according to any padding state machines on the circuit.
+ *
+ * For origin circuits, this means we read a cell from the network.
+ * For middle relay circuits, this means we received a cell from the
+ * origin.
+ */
 void
 circpad_event_padding_received(circuit_t *on_circ)
 {
@@ -866,6 +952,13 @@ circpad_event_padding_received(circuit_t *on_circ)
   }
 }
 
+/**
+ * An "infinite" delay has ben chosen from one of our histograms.
+ *
+ * "Infinite" delays mean don't send padding -- but they can also
+ * mean transition to another state depending on the state machine
+ * definitions. Check the rules and react accordingly.
+ */
 void
 circpad_event_infinity(circpad_machineinfo_t *mi)
 {
@@ -891,6 +984,12 @@ circpad_event_infinity(circpad_machineinfo_t *mi)
   }
 }
 
+/**
+ * All of the bins of our current state's histogram's are empty.
+ *
+ * Check to see if this means transition to another state, and if
+ * not, refill the tokens.
+ */
 void
 circpad_event_bins_empty(circpad_machineinfo_t *mi)
 {
@@ -984,6 +1083,10 @@ circpad_padding_is_from_expected_hop(circuit_t *circ,
   return 0;
 }
 
+/**
+ * Free all padding machines and mutable info associated with
+ * circuit
+ */
 void
 circpad_machines_free(circuit_t *circ)
 {
@@ -999,6 +1102,9 @@ circpad_machines_free(circuit_t *circ)
   }
 }
 
+/**
+ * Allocate a new mutable machineinfo structure.
+ */
 circpad_machineinfo_t *
 circpad_machineinfo_new(circuit_t *on_circ, int machine_index)
 {
@@ -1150,6 +1256,9 @@ circpad_circ_responder_machine_setup(circuit_t *on_circ)
   return;
 }
 
+/**
+ * Check the Protover info to see if a node supports padding.
+ */
 static int
 circpad_node_supports_padding(const node_t *node)
 {
@@ -1162,6 +1271,9 @@ circpad_node_supports_padding(const node_t *node)
   return 0;
 }
 
+/**
+ * Get a node_t for the nth hop in our circuit, starting from 1.
+ */
 static const node_t *
 circuit_get_nth_hop(origin_circuit_t *circ, int hop)
 {
@@ -1182,11 +1294,16 @@ circuit_get_nth_hop(origin_circuit_t *circ, int hop)
   return node_get_by_id(iter->extend_info->identity_digest);
 }
 
+/**
+ * Return true if a particular circuit supports padding
+ * at the desired hop.
+ */
 static int
 circpad_circuit_supports_padding(origin_circuit_t *circ)
 {
   const node_t *hop;
 
+  // XXX: Use the padding machine target hop here!
   if (!(hop = circuit_get_nth_hop(circ, 2))) {
     return 0;
   }
