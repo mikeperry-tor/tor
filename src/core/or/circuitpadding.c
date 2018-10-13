@@ -86,7 +86,7 @@ circpad_histogram_bin_to_usec(circpad_machineinfo_t *mi, int bin)
   uint32_t start_usec;
 
   if (state->use_rtt_estimate)
-    start_usec = mi->rtt_estimate;
+    start_usec = mi->rtt_estimate+state->start_usec;
   else
     start_usec = state->start_usec;
 
@@ -109,7 +109,7 @@ circpad_histogram_usec_to_bin(circpad_machineinfo_t *mi, uint32_t us)
   int bin;
 
   if (state->use_rtt_estimate)
-    start_usec = mi->rtt_estimate;
+    start_usec = mi->rtt_estimate+state->start_usec;
   else
     start_usec = state->start_usec;
 
@@ -1108,8 +1108,6 @@ circpad_circ_responder_machine_setup(circuit_t *on_circ)
   circ_responder_machine.burst.use_rtt_estimate = 1;
   /* The histogram is 1 bin */
   circ_responder_machine.burst.histogram_len = 1;
-  /* XXX this can be removed since we use use_rtt_estimate.. Or: allow to
-   * specify both, and add them together. */
   circ_responder_machine.burst.start_usec = 5000;
   circ_responder_machine.burst.range_sec = 10;
   /* During burst state we wait forever for padding to arrive.

@@ -128,11 +128,8 @@ typedef struct circpad_state_t {
   circpad_transition_t transition_events[CIRCPAD_NUM_STATES];
 
   /**
-   * If true, estimate the RTT and use that for the histogram base instead of
-   * start_usec.
-   *
-   * Instead of hardcoding a start of the histogram, measure the round trip
-   * time of circuits that are to the exit.
+   * If true, estimate the RTT from this relay to the exit/website and add that
+   * to start_usec for use as the histogram bin 0 start delay.
    *
    * Right now this is only supported for relay-side state machines.
    */
