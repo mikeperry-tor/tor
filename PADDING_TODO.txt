@@ -11,23 +11,22 @@ TODO sketch for this branch, in rough priority order:
   - Verify we're scheduling new padding in sane places
   - Verify event ordering for events that the padding code emits to itself
     (such as bins empty, padding sent, infinity, etc)
-  - machine setup events
-    - Support multiple WTF-PAD machines per circuit
   - Generic start state code
+    - Start state vs negotiate
+  - Does padding negotiate response need a delay, or just
+    better choice of machine creation conditions?
   - Add tests for detecting padding from wrong hop
+  - Add tests for machine replacement
   - Better test coverage in general
   - Rephist timer stats
 
+- Different termination condition instead of Infinity bin?
+
 - Determine good hardcoded/example histograms
 
-- Allow padding on specific circuit purposes
-  - 2 weeks
+- Specify target circuit lifetime?
 
-- Allow padding events to start/stop padding based on circuit
-  construction state and stream usage and target circuit lifetime
-  - 1 week
-
-- Different termination condition instead of Infinity bin?
+- Specify ports for machine??
 
 - Support torrc load+serialization of state machines
   - ??
