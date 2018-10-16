@@ -39,7 +39,7 @@ const circpad_state_t *circpad_machine_current_state(
         circpad_machineinfo_t *machine);
 void circpad_circ_token_machine_setup(circuit_t *on_circ);
 
-circpad_machineinfo_t *circpad_machineinfo_new(circuit_t *on_circ,
+circpad_machineinfo_t *circpad_circuit_machineinfo_new(circuit_t *on_circ,
                                                int machine_index);
 void circpad_machine_remove_higher_token(circpad_machineinfo_t *mi,
                                          uint64_t target_bin_us);
@@ -153,14 +153,14 @@ free_fake_orcirc(circuit_t *circ)
 
   relay_crypto_clear(&orcirc->crypto);
 
-  circpad_machines_free(circ);
+  circpad_circuit_machineinfo_free(circ);
   tor_free(circ);
 }
 
 void
 free_fake_origin_circuit(origin_circuit_t *circ)
 {
-  circpad_machines_free(TO_CIRCUIT(circ));
+  circpad_circuit_machineinfo_free(TO_CIRCUIT(circ));
   circuit_clear_cpath(circ);
   tor_free(circ);
 }
@@ -204,28 +204,36 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
   (void)cell; (void)on_stream; (void)filename; (void)lineno;
 
   if (circ == client_side) {
-    int is_target_hop = circpad_padding_is_from_expected_hop(circ,
-                                                             layer_hint);
-    tt_int_op(cell_direction, OP_EQ, CELL_DIRECTION_OUT);
-    tt_int_op(is_target_hop, OP_EQ, 1);
-
-    fprintf(stderr, "Client padded\n");
-    // Pretend a padding cell was sent
-    circpad_event_padding_sent(client_side);
-
     if (cell->payload[0] == RELAY_COMMAND_PADDING_NEGOTIATE) {
       fprintf(stderr, "Client sent padding negotiate\n");
       // Deliver to relay
-      circpad_event_padding_negotiate(relay_side, cell);
-    }
+      circpad_handle_padding_negotiate(relay_side, cell);
+    } else {
 
+      int is_target_hop = circpad_padding_is_from_expected_hop(circ,
+                                                             layer_hint);
+      tt_int_op(cell_direction, OP_EQ, CELL_DIRECTION_OUT);
+      tt_int_op(is_target_hop, OP_EQ, 1);
+
+      fprintf(stderr, "Client padded\n");
+      // Pretend a padding cell was sent
+      circpad_event_padding_sent(client_side);
+    }
     // Receive padding cell at middle
     circpad_event_padding_received(relay_side);
     n_client_cells++;
   } else if (circ == relay_side) {
     tt_int_op(cell_direction, OP_EQ, CELL_DIRECTION_IN);
 
-    fprintf(stderr, "Relay padded\n");
+    if (cell->payload[0] == RELAY_COMMAND_PADDING_NEGOTIATED) {
+      // XXX: blah need right layer_hint..
+      circpad_handle_padding_negotiated(client_side, cell,
+                                        TO_ORIGIN_CIRCUIT(client_side)
+                                           ->cpath->next);
+      fprintf(stderr, "Relay padding negotiated\n");
+    } else {
+      fprintf(stderr, "Relay padded\n");
+    }
     // Pretend a padding cell was sent
     circpad_event_padding_sent(relay_side);
 
@@ -271,11 +279,13 @@ test_circuitpadding_rtt(void *arg)
 
   monotime_init();
   timers_initialize();
+  circpad_machines_init();
 
   MOCK(circuit_package_relay_cell,
        circuit_package_relay_cell_mock);
-  circpad_circ_responder_machine_setup(relay_side);
-  circpad_circ_client_machine_setup(client_side);
+
+  circpad_circ_token_machine_setup(client_side);
+  circpad_circ_token_machine_setup(relay_side);
 
   /* Test 1: Test measuring RTT */
   circpad_event_nonpadding_received((circuit_t*)relay_side);
@@ -356,16 +366,10 @@ static circpad_machine_t circ_client_machine;
 void
 circpad_circ_token_machine_setup(circuit_t *on_circ)
 {
-  /* Free the old machines (if any) */
-  circpad_machines_free(on_circ);
-
   on_circ->padding_machine[0] = &circ_client_machine;
-  on_circ->padding_info[0] = circpad_machineinfo_new(on_circ, 0);
+  on_circ->padding_info[0] = circpad_circuit_machineinfo_new(on_circ, 0);
 
-  if (circ_client_machine.is_initialized)
-    return;
-
-  circ_client_machine.transition_burst_events =
+   circ_client_machine.transition_burst_events =
     CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
 
   circ_client_machine.burst.transition_events[CIRCPAD_STATE_BURST] =
@@ -388,8 +392,7 @@ circpad_circ_token_machine_setup(circuit_t *on_circ)
   circ_client_machine.burst.histogram[3] = 2;
   circ_client_machine.burst.histogram[4] = 2;
   circ_client_machine.burst.histogram_total = 9;
-
-  circ_client_machine.is_initialized = 1;
+  circ_client_machine.burst.use_rtt_estimate = 1;
 
   return;
 }
@@ -635,6 +638,7 @@ test_circuitpadding_negotiation(void *arg)
   nodes_init();
   monotime_init();
   timers_initialize();
+  circpad_machines_init();
 
   MOCK(node_get_by_id,
        node_get_by_id_mock);
@@ -646,17 +650,9 @@ test_circuitpadding_negotiation(void *arg)
   simulate_single_hop_extend(client_side, relay_side, 1);
   simulate_single_hop_extend(client_side, relay_side, 1);
 
-  /* Verify no padding yet */
-  tt_ptr_op(relay_side->padding_machine[0], OP_EQ, NULL);
-  tt_int_op(n_relay_cells, OP_EQ, 0);
-  tt_int_op(n_client_cells, OP_EQ, 0);
-
-  /* Try to negotiate padding */
-  circpad_negotiate_padding(TO_ORIGIN_CIRCUIT(client_side),
-                            CIRCPAD_MACHINE_CIRC_SETUP, 1);
-
   /* verify padding was negotiated */
   tt_ptr_op(relay_side->padding_machine[0], OP_NE, NULL);
+  tt_ptr_op(relay_side->padding_info[0], OP_NE, NULL);
 
   /* verify echo was sent */
   tt_int_op(n_relay_cells, OP_EQ, 1);
@@ -678,17 +674,10 @@ test_circuitpadding_negotiation(void *arg)
   simulate_single_hop_extend(client_side, relay_side, 1);
   simulate_single_hop_extend(client_side, relay_side, 0);
 
-  /* Verify no padding yet */
+  /* verify no padding was negotiated */
   tt_ptr_op(relay_side->padding_machine[0], OP_EQ, NULL);
   tt_int_op(n_relay_cells, OP_EQ, 1);
   tt_int_op(n_client_cells, OP_EQ, 1);
-
-  /* Try to negotiate padding */
-  circpad_negotiate_padding(TO_ORIGIN_CIRCUIT(client_side),
-                            CIRCPAD_MACHINE_CIRC_SETUP, 1);
-
-  /* verify no padding was negotiated */
-  tt_ptr_op(relay_side->padding_machine[0], OP_EQ, NULL);
 
   /* verify no echo was sent */
   tt_int_op(n_relay_cells, OP_EQ, 1);
@@ -697,9 +686,10 @@ test_circuitpadding_negotiation(void *arg)
   /* Finish circuit */
   simulate_single_hop_extend(client_side, relay_side, 1);
 
-  /* Try to negotiate padding */
+  /* Force negotiate padding. */
   circpad_negotiate_padding(TO_ORIGIN_CIRCUIT(client_side),
-                            CIRCPAD_MACHINE_CIRC_SETUP, 1);
+                            CIRCPAD_MACHINE_CIRC_SETUP,
+                            2, CIRCPAD_COMMAND_START);
 
   /* verify no padding was negotiated */
   tt_ptr_op(relay_side->padding_machine[0], OP_EQ, NULL);
@@ -762,6 +752,9 @@ simulate_single_hop_extend(circuit_t *client, circuit_t *mid_relay,
 
   hop->package_window = circuit_initial_package_window();
   hop->deliver_window = CIRCWINDOW_START;
+
+  // Signal that the hop was added
+  circpad_event_circ_added_hop(TO_ORIGIN_CIRCUIT(client));
 }
 
 void
@@ -788,46 +781,28 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   relay_side->purpose = CIRCUIT_PURPOSE_OR;
   client_side->purpose = CIRCUIT_PURPOSE_C_GENERAL;
 
+  nodes_init();
   monotime_init();
   timers_initialize();
-
-  circpad_circ_responder_machine_setup(relay_side);
-  circpad_circ_client_machine_setup(client_side);
+  circpad_machines_init();
 
   MOCK(circuit_package_relay_cell,
        circuit_package_relay_cell_mock);
+  MOCK(node_get_by_id,
+       node_get_by_id_mock);
 
   /* Test case #1: Build a 3 hop circuit, then wait and let pad */
-  for (int i = 0; i < 3; i++) {
-    simulate_single_hop_extend(client_side, relay_side, 1);
+  simulate_single_hop_extend(client_side, relay_side, 1);
+  simulate_single_hop_extend(client_side, relay_side, 1);
+  simulate_single_hop_extend(client_side, relay_side, 1);
 
-    tt_int_op(client_side->padding_info[0]->current_state, OP_EQ,
-              CIRCPAD_STATE_BURST);
-    tt_int_op(relay_side->padding_info[0]->current_state, OP_EQ,
-              CIRCPAD_STATE_BURST);
-  }
-
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
-            OP_NE, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
-            OP_EQ, 0);
-  event_base_loop(tor_libevent_get_base(), 0);
-  tt_int_op(n_client_cells, OP_EQ, 1);
-  tt_int_op(n_relay_cells, OP_EQ, 0);
-
-  tt_int_op(relay_side->padding_info[0]->current_state, OP_EQ,
-              CIRCPAD_STATE_GAP);
-
-  fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
-            OP_EQ, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
-            OP_NE, 0);
-  event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 1);
   tt_int_op(n_relay_cells, OP_EQ, 1);
+  tt_int_op(client_side->padding_info[0]->current_state, OP_EQ,
+                CIRCPAD_STATE_BURST);
+  tt_int_op(relay_side->padding_info[0]->current_state, OP_EQ,
+          CIRCPAD_STATE_BURST);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
             OP_NE, 0);
   tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
@@ -835,6 +810,9 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 2);
   tt_int_op(n_relay_cells, OP_EQ, 1);
+
+  tt_int_op(relay_side->padding_info[0]->current_state, OP_EQ,
+              CIRCPAD_STATE_GAP);
 
   fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
@@ -862,6 +840,60 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 3);
   tt_int_op(n_relay_cells, OP_EQ, 3);
+
+  fprintf(stderr, "Wait loop\n");
+  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_NE, 0);
+  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_EQ, 0);
+  event_base_loop(tor_libevent_get_base(), 0);
+  tt_int_op(n_client_cells, OP_EQ, 4);
+  tt_int_op(n_relay_cells, OP_EQ, 3);
+
+  fprintf(stderr, "Wait loop\n");
+  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_EQ, 0);
+  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_NE, 0);
+  event_base_loop(tor_libevent_get_base(), 0);
+  tt_int_op(n_client_cells, OP_EQ, 4);
+  tt_int_op(n_relay_cells, OP_EQ, 4);
+
+  fprintf(stderr, "Wait loop\n");
+  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_NE, 0);
+  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_EQ, 0);
+  event_base_loop(tor_libevent_get_base(), 0);
+  tt_int_op(n_client_cells, OP_EQ, 5);
+  tt_int_op(n_relay_cells, OP_EQ, 4);
+
+  fprintf(stderr, "Wait loop\n");
+  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_EQ, 0);
+  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_NE, 0);
+  event_base_loop(tor_libevent_get_base(), 0);
+  tt_int_op(n_client_cells, OP_EQ, 5);
+  tt_int_op(n_relay_cells, OP_EQ, 5);
+
+  fprintf(stderr, "Wait loop\n");
+  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_NE, 0);
+  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_EQ, 0);
+  event_base_loop(tor_libevent_get_base(), 0);
+  tt_int_op(n_client_cells, OP_EQ, 6);
+  tt_int_op(n_relay_cells, OP_EQ, 5);
+
+  fprintf(stderr, "Wait loop\n");
+  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_EQ, 0);
+  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+            OP_NE, 0);
+  event_base_loop(tor_libevent_get_base(), 0);
+  tt_int_op(n_client_cells, OP_EQ, 6);
+  tt_int_op(n_relay_cells, OP_EQ, 6);
 
   tt_int_op(client_side->padding_info[0]->current_state,
             OP_EQ, CIRCPAD_STATE_END);
