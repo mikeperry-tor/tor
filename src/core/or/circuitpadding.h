@@ -58,6 +58,42 @@ typedef enum {
 #define CIRCPAD_DELAY_INFINITE  (UINT32_MAX)
 
 /**
+ * These constants form a bitfield that specifies when a state machine
+ * should be applied to a circuit.
+ */
+typedef enum {
+  CIRCPAD_CIRC_BUILDING = 1<<0,
+  CIRCPAD_CIRC_OPENED = 1<<1,
+  CIRCPAD_CIRC_STREAMS = 1<<2
+} circpad_circuit_state_t;
+
+#define CIRCPAD_STATE_ALL   \
+    (CIRCPAD_CIRC_BUILDING|CIRCPAD_CIRC_OPENED|CIRCPAD_CIRC_STREAMS)
+
+typedef uint32_t circpad_purpose_mask_t;
+#define CIRCPAD_PURPOSE_ALL (0xFFFFFFFF)
+
+/**
+ * These are the conditions that must be met before a
+ * client decides to initiate padding on a circuit.
+ *
+ * A circuit must have at least min_hops built.
+ */
+typedef struct circpad_machine_conditions_t {
+  /**Only apply padding *if* the circuit has this many hops */
+  uint8_t min_hops : 3;
+
+  /** Only apply padding *if* the circuit's state matches any of
+   *  the bits set in this bitmask. */
+  circpad_circuit_state_t state_mask;
+
+  /** Only apply padding *if* the circuit's purpose matches one
+   *  of the bits set in this bitmask */
+  circpad_purpose_mask_t purpose_mask;
+
+} circpad_machine_conditions_t;
+
+/**
  * Token removal strategy options.
  *
  * The WTF-PAD histograms are meant to specify a target distribution to shape
@@ -211,8 +247,34 @@ HANDLE_DECL(circpad_machineinfo, circpad_machineinfo_t,);
 #define CIRCPAD_GET_MACHINE(machineinfo) \
     ((machineinfo)->on_circ->padding_machine[(machineinfo)->machine_index])
 
+/**
+ * This specifies a particular padding machine to use after negotiation.
+ *
+ * The constants for machine_num_t are in trunnel.
+ * We want to be able to define extra numbers in the consensus/torrc, though.
+ */
+typedef uint8_t circpad_machine_num_t;
+
 /** Global state machine structure from the consensus */
 typedef struct circpad_machine_t {
+  /** Global machine number */
+  circpad_machine_num_t machine_num;
+
+  // XXX: These next three fields are origin machine-only...
+  /** This machine can only kill fascists if the right conditions are met. */
+  circpad_machine_conditions_t conditions;
+
+  /** Origin side or relay side */
+  uint8_t origin_side : 1;
+
+  /** Which machine index slot should this machine go into in
+   *  the array on the circuit_t */
+  uint8_t machine_index : 1;
+
+  /** Which hop in the circuit should we send padding to/from?
+   *  1-indexed (ie: hop #1 is guard, #2 middle, #3 exit). */
+  uint8_t target_hopnum : 4;
+
   /** Transition to the burst state (from start) on the events that are set
    *  in this bitfield */
   circpad_transition_t transition_burst_events;
@@ -227,12 +289,6 @@ typedef struct circpad_machine_t {
   /** The gap state. */
   circpad_state_t gap;
 
-  /** Which hop in the circuit should we send padding to/from?
-   *  1-indexed (ie: hop #1 is guard, #2 middle, #3 exit). */
-  uint8_t target_hopnum;
-
-  /** Non-zero if we've set up this machine */
-  uint8_t is_initialized : 1;
 } circpad_machine_t;
 
 /** Padding decision upon receiving an event. (Just for unittest) */
@@ -257,28 +313,17 @@ void circpad_event_padding_received(circuit_t *on_circ);
 void circpad_event_infinity(circpad_machineinfo_t *mi);
 void circpad_event_bins_empty(circpad_machineinfo_t *mi);
 
-/* Machines for various usecases */
+/** Machine creation events */
+void circpad_event_circ_added_hop(origin_circuit_t *on_circ);
+void circpad_event_circ_built(origin_circuit_t *circ);
+void circpad_event_purpose_changed(origin_circuit_t *circ);
+void circpad_event_circ_has_streams(origin_circuit_t *circ);
+void circpad_event_circ_has_no_streams(origin_circuit_t *circ);
 
-/**
- * This specifies a particular padding machine to use after negotiation.
- *
- * The constants for machine_num_t are in trunnel.
- * We want to be able to define extra numbers in the consensus/torrc, though.
- */
-typedef uint8_t circpad_machine_num_t;
+void circpad_machines_init(void);
+void circpad_machines_free(void);
 
-/* Toy state machines */
-/* They attach a state machine to a circuit */
-void circpad_circ_client_machine_setup(circuit_t *);
-void circpad_circ_responder_machine_setup(circuit_t *on_circ);
-
-void circpad_hs_serv_intro_machine_setup(circuit_t *);
-void circpad_hs_client_intro_machine_setup(circuit_t *);
-
-void circpad_adaptive_padding_machine_setup(circuit_t *);
-void circpad_hs_serv_rend_machine_setup(circuit_t *);
-
-void circpad_machines_free(circuit_t *circ);
+void circpad_circuit_machineinfo_free(circuit_t *circ);
 
 int circpad_padding_is_from_expected_hop(circuit_t *circ,
                                          crypt_path_t *from_hop);
@@ -288,9 +333,16 @@ char *circpad_machine_to_string(const circpad_machine_t *machine);
 const circpad_machine_t *circpad_string_to_machine(const char *str);
 
 /* Padding negotiation between client and middle */
-void circpad_event_padding_negotiate(circuit_t *circ, cell_t *cell);
+int circpad_handle_padding_negotiate(circuit_t *circ, cell_t *cell);
+int circpad_handle_padding_negotiated(circuit_t *circ, cell_t *cell,
+                                      crypt_path_t *layer_hint);
 int circpad_negotiate_padding(origin_circuit_t *circ,
-                              circpad_machine_num_t machine, int echo);
+                          circpad_machine_num_t machine,
+                          int target_hopnum,
+                          int command);
+int circpad_padding_negotiated(circuit_t *circ,
+                           circpad_machine_num_t machine,
+                           int command,
+                           int response);
 
 #endif
-
