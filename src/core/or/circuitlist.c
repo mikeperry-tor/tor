@@ -1166,7 +1166,7 @@ circuit_free_(circuit_t *circ)
               TO_ORIGIN_CIRCUIT(circ)->global_identifier : 0);
 
   /* Free any circuit padding structures */
-  circpad_machines_free(circ);
+  circpad_circuit_machineinfo_free(circ);
 
   if (should_free) {
     memwipe(mem, 0xAA, memlen); /* poison memory */
