@@ -186,6 +186,8 @@ typedef struct circpad_state_t {
  *
  * This is the per-circuit state that changes regarding the global state
  * machine. Some parts of it are optional (ie NULL).
+ *
+ * XXX: Play with layout to minimize space on x64 Linux (most common relay).
  */
 typedef struct circpad_machineinfo_t {
   HANDLE_ENTRY(circpad_machineinfo, circpad_machineinfo_t);
@@ -195,12 +197,6 @@ typedef struct circpad_machineinfo_t {
 
   /** The circuit for this machine */
   circuit_t *on_circ;
-
-  /** The time at which we scheduled a non-padding packet.
-   * Monotonic time in microseconds since system start.
-   * This is 0 if padding is not currently scheduled.
-   */
-  uint64_t padding_was_scheduled_at_us;
 
   /** A mutable copy of the histogram for the current state.
    *  NULL if remove_tokens is false for that state */
@@ -214,6 +210,11 @@ typedef struct circpad_machineinfo_t {
   circpad_statenum_t current_state;
 
   /**
+   * EWMA estimate of the RTT of the circuit from this hop
+   * to the exit end. */
+  uint32_t rtt_estimate;
+
+  /**
    * The last time we got an event relevant to estimating
    * the RTT. Monotonic time in microseconds since system
    * start.
@@ -221,9 +222,22 @@ typedef struct circpad_machineinfo_t {
   uint64_t last_received_time_us;
 
   /**
-   * EWMA estimate of the RTT of the circuit from this hop
-   * to the exit end. */
-  uint32_t rtt_estimate;
+   * The time at which we scheduled a non-padding packet,
+   * or selected an infinite delay.
+   *
+   * Monotonic time in microseconds since system start.
+   * This is 0 if we haven't chosen a padding delay.
+   */
+  uint64_t padding_scheduled_at_us;
+
+  /**
+   * True if we have scheduled a timer for padding.
+   *
+   * This is 1 if a timer is pending. It is 0 if
+   * no timer is scheduled. (It can be 0 even when
+   * padding_was_scheduled_at_us is non-zero).
+   */
+  uint8_t padding_timer_scheduled : 1;
 
   /**
    * If this is true, we have seen full duplex behavior.
@@ -304,7 +318,7 @@ typedef struct circpad_machine_t {
 
   /**
    * The gap state for this machine.
-   * 
+   *
    * In the original Adaptive Padding algorithm and in WTF-PAD, the gap
    * state serves to simulate an artificial packet train composed of padding
    * packets. It does this by specifying much lower inter-packet delays than

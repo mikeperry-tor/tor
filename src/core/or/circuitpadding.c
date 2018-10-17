@@ -231,6 +231,7 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
     mi->chosen_bin = i;
   }
 
+  /* XXX-circpad_event: Should we even decrement the infinity bin? */
   if (i == state->histogram_len-1) {
     fprintf(stderr, "Infinity pad!\n");
     if (state->token_removal != CIRCPAD_TOKEN_REMOVAL_NONE) {
@@ -238,9 +239,9 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
       mi->histogram[i]--;
     }
 
-    // XXX: bins could be empty here..
-
-    return CIRCPAD_DELAY_INFINITE; // Infinity: Don't send a padding packet
+    // Infinity: Don't send a padding packet. Wait for a real packet
+    // and then see if our bins are empty or what else we should do.
+    return CIRCPAD_DELAY_INFINITE;
   }
 
   tor_assert(i < state->histogram_len - 1);
@@ -450,18 +451,21 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
   uint32_t histogram_total = 0;
 
   /* Dont remove any tokens if there was no padding scheduled */
-  if (!mi->padding_was_scheduled_at_us) {
+  if (!mi->padding_scheduled_at_us) {
     return;
   }
 
   /* If we have scheduled padding some time in the future, we want to see what
      bin we are in at the current time */
-  target_bin_us = current_time - mi->padding_was_scheduled_at_us;
+  target_bin_us = current_time - mi->padding_scheduled_at_us;
 
   /* We are treating this non-padding cell as a padding cell, so we cancel
-     padding */
-  mi->padding_was_scheduled_at_us = 0;
-  timer_disable(mi->padding_timer);
+     padding timer, if present. */
+  mi->padding_scheduled_at_us = 0;
+  if (mi->padding_timer_scheduled) {
+    mi->padding_timer_scheduled = 0;
+    timer_disable(mi->padding_timer);
+  }
 
   /* If we are not in a padding state (like start or end) or if we are not
    * removing tokens we dont need to do any of that */
@@ -489,8 +493,10 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
   /* Check if bins empty. This requires summing up the current mutable
    * machineinfo histogram token total and checking if it is zero.
    * Machineinfo does not keep a running token count. We're assuming the
-   * extra space is not worth this short loop iteration. */
-  for (int b = 0; b < state->histogram_len; b++)
+   * extra space is not worth this short loop iteration.
+   *
+   * We also do not count infinity bin in histogram totals. */
+  for (int b = 0; b < state->histogram_len-1; b++)
     histogram_total += mi->histogram[b];
 
   if (histogram_total == 0) {
@@ -557,7 +563,7 @@ circpad_send_command_to_hop(origin_circuit_t *circ, int hopnum,
 void
 circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi)
 {
-  mi->padding_was_scheduled_at_us = 0;
+  mi->padding_scheduled_at_us = 0;
 
   // Make sure circuit didn't close on us
   if (mi->on_circ->marked_for_close) {
@@ -587,11 +593,14 @@ circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi)
 
   /* Check if bins empty. Right now, we're operating under the assumption
    * that this loop is better than the extra space for maintaining a
-   * running total in machineinfo */
+   * running total in machineinfo. Also note that the above
+   * relay_send could cause a transition, but this is OK because
+   * that will refill tokens anyway. */
   if (mi->histogram && mi->histogram_len) {
     uint32_t histogram_total = 0;
 
-    for (int b = 0; b < mi->histogram_len; b++)
+    /* We do not count the infinity bin for bins empty event */
+    for (int b = 0; b < mi->histogram_len-1; b++)
       histogram_total += mi->histogram[b];
 
     if (histogram_total == 0) {
@@ -653,10 +662,10 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
     return CIRCPAD_NONPADDING_STATE;
   }
 
-  if (mi->padding_was_scheduled_at_us) {
+  if (mi->padding_timer_scheduled) {
     /* Cancel current timer (if any) */
     timer_disable(mi->padding_timer);
-    mi->padding_was_scheduled_at_us = 0;
+    mi->padding_timer_scheduled = 0;
   }
 
   /* in_us = in microseconds */
@@ -665,14 +674,16 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
   log_fn(LOG_INFO,LD_CIRC,"Padding in %u usec\n", in_us);
 
   if (in_us <= 0) {
-    mi->padding_was_scheduled_at_us = monotime_absolute_usec();
+    mi->padding_scheduled_at_us = monotime_absolute_usec();
     circpad_send_padding_cell_for_callback(mi);
     return CIRCPAD_PADDING_SENT;
   }
 
   // Don't schedule if we have infinite delay.
   if (in_us == CIRCPAD_DELAY_INFINITE) {
-    // XXX-MP-AP: Return differently if we transition or not?
+    // XXX-circpad_event: Return differently if we transition or not?
+    // XXX: Don't count infinity bin for bins empty? Do we still
+    // decrement tokens?
     circpad_event_infinity(mi);
     return CIRCPAD_WONTPAD_INFINITY;
   }
@@ -698,11 +709,11 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
                   mi->on_circ->padding_handles[mi->machine_index]);
   }
   timer_schedule(mi->padding_timer, &timeout);
+  mi->padding_timer_scheduled = 1;
+  mi->padding_scheduled_at_us = monotime_absolute_usec();
 
   // TODO-MP-AP: Unify with channelpadding counter
   //rep_hist_padding_count_timers(++total_timers_pending);
-
-  mi->padding_was_scheduled_at_us = monotime_absolute_usec();
 
   return CIRCPAD_PADDING_SCHEDULED;
 }
@@ -748,10 +759,11 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
 
   /* Check cancel events and cancel any pending padding */
   if (state->transition_cancel_events & event) {
-    if (mi->padding_was_scheduled_at_us) {
+    mi->padding_scheduled_at_us = 0;
+    if (mi->padding_timer_scheduled) {
+      mi->padding_timer_scheduled = 0;
       /* Cancel current timer (if any) */
       timer_disable(mi->padding_timer);
-      mi->padding_was_scheduled_at_us = 0;
       return CIRCPAD_WONTPAD_CANCELED;
     }
     return CIRCPAD_WONTPAD_EVENT;
@@ -979,26 +991,7 @@ circpad_event_padding_received(circuit_t *on_circ)
 void
 circpad_event_infinity(circpad_machineinfo_t *mi)
 {
-  circpad_statenum_t state = mi->current_state;
   circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_INFINITY);
-
-  // If we didn't transition, send bins_empty if empty..
-  // XXX-MP-AP: This is kind of a hacky way to detect transition...
-  // Maybe the transition function should return transition information
-  // instead of padding decisions..
-  if (state == mi->current_state) {
-    if (mi->histogram && mi->histogram_len) {
-      uint32_t histogram_total = 0;
-
-      for (int b = 0; b < mi->histogram_len; b++)
-        histogram_total += mi->histogram[b];
-
-      if (histogram_total == 0) {
-        fprintf(stderr, "Bins empty after infnity!\n");
-        circpad_event_bins_empty(mi);
-      }
-    }
-  }
 }
 
 /**
@@ -1464,10 +1457,7 @@ circpad_circ_client_machine_init(void)
   /* We have 5 tokens in the histogram, which means that all circuits will look
    * like they have 7 hops (since we start this machine after the second hop,
    * and tokens are decremented for any valid hops, and fake extends are
-   * used after that -- 2+5==7).
-   *
-   * XXX: Is this true? We may decrement this on both send+recieve of real
-   * extend cells, as per XXX in circpad_machine_transition() above :/ */
+   * used after that -- 2+5==7). */
   circ_client_machine->burst.histogram[0] = 5;
   circ_client_machine->burst.histogram_total = 5;
 
