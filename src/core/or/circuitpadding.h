@@ -282,11 +282,39 @@ typedef struct circpad_machine_t {
    *  in this bitfield */
   circpad_transition_t transition_gap_events;
 
-  /** The burst state for this machine. XXX: Describe burst vs gap in terms
-   * of interpacket delay. */
+  /**
+   * The burst state for this machine.
+   *
+   * In the original Adaptive Padding algorithm and in WTF-PAD
+   * (https://www.freehaven.net/anonbib/cache/ShWa-Timing06.pdf and
+   * https://www.cs.kau.se/pulls/hot/thebasketcase-wtfpad/), the burst
+   * state serves to detect bursts in traffic. This is done by using longer
+   * delays in its histogram, which represent the expected delays between
+   * bursts of packets in the target stream. If this delay expires without a
+   * real packet being sent, the burst state sends a padding packet and then
+   * immediately transitions to the gap state, which is used to generate
+   * a synthetic padding packet train. In this implementation, this transition
+   * needs to be explicitly specified in the burst state's transition events.
+   *
+   * Because of this flexibility, other padding mechanisms can transition
+   * between these two states arbitrarily, to encode other dynamics of
+   * target traffic.
+   */
   circpad_state_t burst;
 
-  /** The gap state. */
+  /**
+   * The gap state for this machine.
+   * 
+   * In the original Adaptive Padding algorithm and in WTF-PAD, the gap
+   * state serves to simulate an artificial packet train composed of padding
+   * packets. It does this by specifying much lower inter-packet delays than
+   * the burst state, and transitioning back to itself after padding is sent
+   * if these timers expire before real traffic is sent. If real traffic is
+   * sent, it transitions back to the burst state.
+   *
+   * Again, in this implementation, these transitions must be specified
+   * explicitly, and other transitions are also permitted.
+   */
   circpad_state_t gap;
 
 } circpad_machine_t;
