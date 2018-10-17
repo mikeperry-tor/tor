@@ -392,7 +392,7 @@ circpad_circ_token_machine_setup(circuit_t *on_circ)
   circ_client_machine.burst.histogram[2] = 2;
   circ_client_machine.burst.histogram[3] = 2;
   circ_client_machine.burst.histogram[4] = 2;
-  circ_client_machine.burst.histogram_total = 9;
+  circ_client_machine.burst.histogram_total = 7;
   circ_client_machine.burst.use_rtt_estimate = 1;
 
   return;
@@ -517,7 +517,11 @@ test_circuitpadding_tokens(void *arg)
   circpad_event_nonpadding_received((circuit_t*)client_side);
   tt_int_op(mi->histogram[4], OP_EQ, 1);
   circpad_event_nonpadding_received((circuit_t*)client_side);
-  // We should have refilled there
+  tt_int_op(mi->histogram[4], OP_EQ, 0);
+
+  circpad_event_nonpadding_sent((circuit_t*)client_side);
+
+  // We should have refilled here.
   tt_int_op(mi->histogram[4], OP_EQ, 2);
 
   /* 3.a. Bin 0 */
@@ -804,9 +808,9 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(relay_side->padding_info[0]->current_state, OP_EQ,
           CIRCPAD_STATE_BURST);
 
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 2);
@@ -816,81 +820,81 @@ test_circuitpadding_circuitsetup_machine(void *arg)
               CIRCPAD_STATE_GAP);
 
   fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 2);
   tt_int_op(n_relay_cells, OP_EQ, 2);
 
   fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 3);
   tt_int_op(n_relay_cells, OP_EQ, 2);
 
   fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 3);
   tt_int_op(n_relay_cells, OP_EQ, 3);
 
   fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 4);
   tt_int_op(n_relay_cells, OP_EQ, 3);
 
   fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 4);
   tt_int_op(n_relay_cells, OP_EQ, 4);
 
   fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 5);
   tt_int_op(n_relay_cells, OP_EQ, 4);
 
   fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 5);
   tt_int_op(n_relay_cells, OP_EQ, 5);
 
   fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 6);
   tt_int_op(n_relay_cells, OP_EQ, 5);
 
   fprintf(stderr, "Wait loop\n");
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 6);
@@ -898,11 +902,11 @@ test_circuitpadding_circuitsetup_machine(void *arg)
 
   tt_int_op(client_side->padding_info[0]->current_state,
             OP_EQ, CIRCPAD_STATE_END);
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   tt_int_op(relay_side->padding_info[0]->current_state,
             OP_EQ, CIRCPAD_STATE_GAP);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
 
   /* Simulate application traffic */
@@ -913,11 +917,11 @@ test_circuitpadding_circuitsetup_machine(void *arg)
 
   tt_int_op(client_side->padding_info[0]->current_state,
             OP_EQ, CIRCPAD_STATE_END);
-  tt_int_op(client_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   tt_int_op(relay_side->padding_info[0]->current_state,
             OP_EQ, CIRCPAD_STATE_END);
-  tt_int_op(relay_side->padding_info[0]->padding_was_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
 
   fprintf(stderr, "Client %d, relay: %d\n", n_client_cells, n_relay_cells);
