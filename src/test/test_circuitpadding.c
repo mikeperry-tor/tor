@@ -218,9 +218,10 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
       fprintf(stderr, "Client padded\n");
       // Pretend a padding cell was sent
       circpad_event_padding_sent(client_side);
+
+      // Receive padding cell at middle
+      circpad_event_padding_received(relay_side);
     }
-    // Receive padding cell at middle
-    circpad_event_padding_received(relay_side);
     n_client_cells++;
   } else if (circ == relay_side) {
     tt_int_op(cell_direction, OP_EQ, CELL_DIRECTION_IN);
@@ -233,12 +234,12 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
       fprintf(stderr, "Relay padding negotiated\n");
     } else {
       fprintf(stderr, "Relay padded\n");
+      // Pretend a padding cell was sent
+      circpad_event_padding_sent(relay_side);
+      // Receive padding cell at client
+      circpad_event_padding_received(client_side);
     }
-    // Pretend a padding cell was sent
-    circpad_event_padding_sent(relay_side);
 
-    // Receive padding cell at client
-    circpad_event_padding_received(client_side);
     n_relay_cells++;
   }
 
