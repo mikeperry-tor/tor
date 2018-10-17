@@ -757,7 +757,12 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
     return CIRCPAD_WONTPAD_EVENT;
   }
 
-  /* See if we need to transition to any other states based on this event */
+  /* See if we need to transition to any other states based on this event.
+   * Whenever a transition happens, even to our own state, we schedule padding.
+   *
+   * So if a state only wants to schedule padding for an event, it specifies a
+   * transition to itself. All non-specified events are ignored.
+   */
   for (circpad_statenum_t s = CIRCPAD_STATE_START; s < CIRCPAD_NUM_STATES;
        s++) {
     if (state->transition_events[s] & event) {
@@ -768,10 +773,6 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
         circpad_machine_setup_tokens(mi);
       }
 
-      /* XXX do we always want to re-schedule padding after a sent/receive
-       * cell? the code is rescheduling regarldess of whether the event was
-       * sent/receive. However, the cancel above will override this
-       * for selected events. Is that enough? */
       return circpad_machine_schedule_padding(mi);
     }
   }
