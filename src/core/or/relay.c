@@ -82,7 +82,6 @@
 #include "feature/nodelist/routerlist.h"
 #include "feature/nodelist/routerparse.h"
 #include "core/or/scheduler.h"
-#include "feature/stats/rephist.h"
 
 #include "core/or/cell_st.h"
 #include "core/or/cell_queue_st.h"
@@ -293,19 +292,15 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
     return 0;
   }
 
-  /* not recognized. pass it on. */
+  /* not recognized. inform circpad and pass it on. */
+  circpad_deliver_unrecognized_cell_events(circ, cell_direction);
+
   if (cell_direction == CELL_DIRECTION_OUT) {
     cell->circ_id = circ->n_circ_id; /* switch it */
     chan = circ->n_chan;
-    /* When direction is out (away from origin), then we received non-padding
-       cell coming from the origin to us. */
-    circpad_event_nonpadding_received(circ);
   } else if (! CIRCUIT_IS_ORIGIN(circ)) {
     cell->circ_id = TO_OR_CIRCUIT(circ)->p_circ_id; /* switch it */
     chan = TO_OR_CIRCUIT(circ)->p_chan;
-    /* It's in and not origin, so the cell is going away from us.
-     * So we are relaying a non-padding cell towards the origin. */
-    circpad_event_nonpadding_sent(circ);
   } else {
     log_fn(LOG_PROTOCOL_WARN, LD_OR,
            "Dropping unrecognized inbound cell on origin circuit.");
@@ -584,25 +579,8 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   log_debug(LD_OR,"delivering %d cell %s.", relay_command,
             cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward");
 
-  /* RELAY_COMMAND_DROP is the multi-hop (aka circuit-level) padding cell in
-   * tor. (CELL_PADDING is a channel-level padding cell, which is not relayed
-   * or processed here) */
-   if (relay_command == RELAY_COMMAND_DROP) {
-    log_notice(LD_OR,"delivering %d cell %s.", relay_command,
-              cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward");
-
-    rep_hist_padding_count_write(PADDING_TYPE_DROP);
-    /* This is a padding cell sent from the client or from the middle node,
-     * because it's invoked from circuitpadding.c. */
-    circpad_event_padding_sent(circ);
-  } else {
-    /* This is a non-padding cell sent from the client (or some other
-     * leaky-pipe send from this node, which currently does not happen
-     * for anything but padding XXX: Is this true? HS seems to use it..
-     * And maybe extends and truncates, too?).
-     * XXX: Padding negotiate too */
-    circpad_event_nonpadding_sent(circ);
-  }
+  /* Tell circpad we're sending a relay cell */
+  circpad_deliver_sent_relay_cell_events(circ, relay_command);
 
   /* If we are sending an END cell and this circuit is used for a tunneled
    * directory request, advance its state. */
@@ -1505,46 +1483,11 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
     }
   }
 
-  /* XXX: Can we combine this below? */
-  if (rh.command == RELAY_COMMAND_PADDING_NEGOTIATE) {
-    circpad_handle_padding_negotiate(circ, cell);
-
-    rep_hist_padding_count_read(PADDING_TYPE_DROP);
-    circpad_event_padding_received(circ);
-    return 0;
-  } else if (rh.command == RELAY_COMMAND_PADDING_NEGOTIATED) {
-    if (circpad_handle_padding_negotiated(circ, cell, layer_hint) == 0)
-      circuit_read_valid_data(TO_ORIGIN_CIRCUIT(circ), rh.length);
-
-    rep_hist_padding_count_read(PADDING_TYPE_DROP);
-    circpad_event_padding_received(circ);
-    return 0;
-  } else if (rh.command == RELAY_COMMAND_DROP) {
-    if (CIRCUIT_IS_ORIGIN(circ)) {
-      if (circpad_padding_is_from_expected_hop(circ, layer_hint)) {
-        circuit_read_valid_data(TO_ORIGIN_CIRCUIT(circ), rh.length);
-      } else {
-        /* This is unexpected padding. Ignore it for now. */
-        return 0;
-      }
-    }
-
-    rep_hist_padding_count_read(PADDING_TYPE_DROP);
-    /* The cell should be recognized by now, which means that we are on the
-       destination, which means that we received a padding cell. We might be
-       the client or the Middle node, still, because leaky-pipe. */
-    circpad_event_padding_received(circ);
-    log_notice(LD_OR,"Got padding cell!");
-    return 0;
-  } else {
-    /* We received a non-padding cell on the edge */
-    /* XXX this is double counted for middle nodes */
-    circpad_event_nonpadding_received(circ);
-  }
+  /* Tell circpad that we've recieved a recognized cell */
+  circpad_deliver_recognized_relay_cell_events(circ, rh.command, layer_hint);
 
   /* either conn is NULL, in which case we've got a control cell, or else
    * conn points to the recognized stream. */
-
   if (conn && !connection_state_is_open(TO_CONN(conn))) {
     if (conn->base_.type == CONN_TYPE_EXIT &&
         (conn->base_.state == EXIT_CONN_STATE_CONNECTING ||
@@ -1564,6 +1507,16 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
   }
 
   switch (rh.command) {
+    case RELAY_COMMAND_DROP:
+      /* Already examined in circpad_deliver_recognized_relay_cell_events */
+      return 0;
+    case RELAY_COMMAND_PADDING_NEGOTIATE:
+      circpad_handle_padding_negotiate(circ, cell);
+      return 0;
+    case RELAY_COMMAND_PADDING_NEGOTIATED:
+      if (circpad_handle_padding_negotiated(circ, cell, layer_hint) == 0)
+        circuit_read_valid_data(TO_ORIGIN_CIRCUIT(circ), rh.length);
+      return 0;
     case RELAY_COMMAND_BEGIN:
     case RELAY_COMMAND_BEGIN_DIR:
       if (layer_hint &&
