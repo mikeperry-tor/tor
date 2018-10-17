@@ -5,8 +5,6 @@ TODO sketch for this branch, in rough priority order:
    machine.
 
 - Clean up/fix XXX's and FIXMEs
-  - Check token removal: Should only remove toks on "send" events, not recv
-  - Verify we're scheduling new padding in sane places
   - Verify event ordering for events that the padding code emits to itself
     (such as bins empty, padding sent, infinity, etc)
   - Generic start state code
