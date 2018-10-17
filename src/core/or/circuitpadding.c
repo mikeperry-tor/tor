@@ -4,7 +4,9 @@
 #include "core/or/or.h"
 #include "core/or/circuitpadding.h"
 #include "core/or/circuitlist.h"
+#include "core/or/circuituse.h"
 #include "core/or/relay.h"
+#include "feature/stats/rephist.h"
 
 #include "core/or/channel.h"
 
@@ -768,7 +770,8 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
 
       /* XXX do we always want to re-schedule padding after a sent/receive
        * cell? the code is rescheduling regarldess of whether the event was
-       * sent/receive */
+       * sent/receive. However, the cancel above will override this
+       * for selected events. Is that enough? */
       return circpad_machine_schedule_padding(mi);
     }
   }
@@ -1246,6 +1249,111 @@ circpad_padding_is_from_expected_hop(circuit_t *circ,
   }
 
   return 0;
+}
+
+/**
+ * Deliver circpad events for an "unrecognized cell".
+ *
+ * Unrecognized cells are sent to relays and are forwarded
+ * onto the next hop of their circuits. Unrecognized cells
+ * are by definition not padding. We need to tell relay-side
+ * state machines that a non-padding cell was sent or received,
+ * depending on the direction, so they can update their histograms
+ * and decide to pad or not.
+ */
+void
+circpad_deliver_unrecognized_cell_events(circuit_t *circ,
+                                         cell_direction_t dir)
+{
+  if (!CIRCUIT_IS_ORIGIN(circ)) {
+    // XXX: Log? Bug? We should never see unrecognized
+    // cells at origin.
+    return;
+  }
+
+  if (dir == CELL_DIRECTION_OUT) {
+    /* When direction is out (away from origin), then we received non-padding
+       cell coming from the origin to us. */
+    circpad_event_nonpadding_received(circ);
+  } else if (dir == CELL_DIRECTION_IN) {
+    /* It's in and not origin, so the cell is going away from us.
+     * So we are relaying a non-padding cell towards the origin. */
+    circpad_event_nonpadding_sent(circ);
+  }
+}
+
+/**
+ * Deliver circpad events for "recognized" relay cells.
+ *
+ * Recognized cells are destined for this hop, either client or middle.
+ * Check if this is a padding cell or not, and send the appropiate
+ * received event.
+ */
+void
+circpad_deliver_recognized_relay_cell_events(circuit_t *circ,
+                                             uint8_t relay_command,
+                                             crypt_path_t *layer_hint)
+{
+  /* Padding negotiate cells are ignored by the state machines
+   * for simplicity. */
+  if (relay_command == RELAY_COMMAND_PADDING_NEGOTIATE ||
+      relay_command == RELAY_COMMAND_PADDING_NEGOTIATED) {
+    return;
+  }
+
+  if (relay_command == RELAY_COMMAND_DROP) {
+    rep_hist_padding_count_read(PADDING_TYPE_DROP);
+
+    if (CIRCUIT_IS_ORIGIN(circ)) {
+      if (circpad_padding_is_from_expected_hop(circ, layer_hint)) {
+        circuit_read_valid_data(TO_ORIGIN_CIRCUIT(circ), 0);
+      } else {
+        /* This is unexpected padding. Ignore it for now. */
+        return;
+      }
+    }
+
+    /* The cell should be recognized by now, which means that we are on the
+       destination, which means that we received a padding cell. We might be
+       the client or the Middle node, still, because leaky-pipe. */
+    circpad_event_padding_received(circ);
+    log_notice(LD_OR,"Got padding cell!");
+  } else {
+    /* We received a non-padding cell on the edge */
+    circpad_event_nonpadding_received(circ);
+  }
+}
+
+/**
+ * Deliver circpad events for relay cells sent from us.
+ *
+ * If this is a padding cell, update our padding stats
+ * and deliver the event. Otherwise just deliver the event.
+ */
+void
+circpad_deliver_sent_relay_cell_events(circuit_t *circ,
+                                       uint8_t relay_command)
+{
+  /* Padding negotiate cells are ignored by the state machines
+   * for simplicity. */
+  if (relay_command == RELAY_COMMAND_PADDING_NEGOTIATE ||
+      relay_command == RELAY_COMMAND_PADDING_NEGOTIATED) {
+    return;
+  }
+
+  /* RELAY_COMMAND_DROP is the multi-hop (aka circuit-level) padding cell in
+   * tor. (CELL_PADDING is a channel-level padding cell, which is not relayed
+   * or processed here) */
+  if (relay_command == RELAY_COMMAND_DROP) {
+    rep_hist_padding_count_write(PADDING_TYPE_DROP);
+    /* This is a padding cell sent from the client or from the middle node,
+     * (because it's invoked from circuitpadding.c) */
+    circpad_event_padding_sent(circ);
+  } else {
+    /* This is a non-padding cell sent from the client or from
+     * this node. */
+    circpad_event_nonpadding_sent(circ);
+  }
 }
 
 /**

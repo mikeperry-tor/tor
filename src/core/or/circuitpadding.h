@@ -304,6 +304,14 @@ typedef enum {
 /**
  * The following are event call-in points that are of interest to
  * the state machines. They are called during cell processing. */
+void circpad_deliver_unrecognized_cell_events(circuit_t *circ,
+                                              cell_direction_t dir);
+void circpad_deliver_sent_relay_cell_events(circuit_t *circ,
+                                            uint8_t relay_command);
+void circpad_deliver_recognized_relay_cell_events(circuit_t *circ,
+                                                  uint8_t relay_command,
+                                                  crypt_path_t *layer_hint);
+
 void circpad_event_nonpadding_sent(circuit_t *on_circ);
 void circpad_event_nonpadding_received(circuit_t *on_circ);
 
