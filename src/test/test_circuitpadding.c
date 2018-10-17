@@ -754,7 +754,7 @@ simulate_single_hop_extend(circuit_t *client, circuit_t *mid_relay,
   hop->deliver_window = CIRCWINDOW_START;
 
   // Signal that the hop was added
-  circpad_event_circ_added_hop(TO_ORIGIN_CIRCUIT(client));
+  circpad_machine_event_circ_added_hop(TO_ORIGIN_CIRCUIT(client));
 }
 
 void
