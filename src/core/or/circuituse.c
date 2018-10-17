@@ -1429,7 +1429,7 @@ circuit_detach_stream(circuit_t *circ, edge_connection_t *conn)
 
       /* If there are no more streams on this circ, tell circpad */
       if (!origin_circ->p_streams)
-        circpad_event_circ_has_no_streams(origin_circ);
+        circpad_machine_event_circ_has_no_streams(origin_circ);
 
       return;
     }
@@ -2629,7 +2629,7 @@ link_apconn_to_circ(entry_connection_t *apconn, origin_circuit_t *circ,
   /* If this is the first stream on this circuit, tell circpad
    * that streams are attached */
   if (!circ->p_streams)
-    circpad_event_circ_has_streams(circ);
+    circpad_machine_event_circ_has_streams(circ);
 
   /* reset it, so we can measure circ timeouts */
   ENTRY_TO_CONN(apconn)->timestamp_last_read_allowed = time(NULL);
@@ -3110,7 +3110,7 @@ circuit_change_purpose(circuit_t *circ, uint8_t new_purpose)
     control_event_circuit_purpose_changed(TO_ORIGIN_CIRCUIT(circ),
                                           old_purpose);
 
-    circpad_event_purpose_changed(TO_ORIGIN_CIRCUIT(circ));
+    circpad_machine_event_purpose_changed(TO_ORIGIN_CIRCUIT(circ));
   }
 }
 

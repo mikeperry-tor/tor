@@ -3409,7 +3409,7 @@ handle_hs_exit_conn(circuit_t *circ, edge_connection_t *conn)
 
   /* If this is the first stream on this circuit, tell circpad */
   if (!origin_circ->p_streams)
-    circpad_event_circ_has_streams(origin_circ);
+    circpad_machine_event_circ_has_streams(origin_circ);
 
   /* Add it into the linked list of p_streams on this circuit */
   conn->next_stream = origin_circ->p_streams;

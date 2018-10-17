@@ -925,7 +925,7 @@ circuit_send_next_onion_skin(origin_circuit_t *circ)
   crypt_path_t *hop = onion_next_hop_in_cpath(circ->cpath);
   circuit_build_times_handle_completed_hop(circ);
 
-  circpad_event_circ_added_hop(circ);
+  circpad_machine_event_circ_added_hop(circ);
 
   if (hop) {
     /* Case two: we're on a hop after the first. */
@@ -933,7 +933,7 @@ circuit_send_next_onion_skin(origin_circuit_t *circ)
   }
 
   /* Case three: the circuit is finished. Do housekeeping tasks on it. */
-  circpad_event_circ_built(circ);
+  circpad_machine_event_circ_built(circ);
   return circuit_build_no_more_hops(circ);
 }
 
