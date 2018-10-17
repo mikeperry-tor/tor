@@ -322,11 +322,11 @@ void circpad_event_infinity(circpad_machineinfo_t *mi);
 void circpad_event_bins_empty(circpad_machineinfo_t *mi);
 
 /** Machine creation events */
-void circpad_event_circ_added_hop(origin_circuit_t *on_circ);
-void circpad_event_circ_built(origin_circuit_t *circ);
-void circpad_event_purpose_changed(origin_circuit_t *circ);
-void circpad_event_circ_has_streams(origin_circuit_t *circ);
-void circpad_event_circ_has_no_streams(origin_circuit_t *circ);
+void circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ);
+void circpad_machine_event_circ_built(origin_circuit_t *circ);
+void circpad_machine_event_purpose_changed(origin_circuit_t *circ);
+void circpad_machine_event_circ_has_streams(origin_circuit_t *circ);
+void circpad_machine_event_circ_has_no_streams(origin_circuit_t *circ);
 
 void circpad_machines_init(void);
 void circpad_machines_free(void);

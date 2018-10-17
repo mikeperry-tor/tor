@@ -1157,7 +1157,7 @@ circpad_add_matching_machines(origin_circuit_t *on_circ)
  * on a circuit.
  */
 void
-circpad_event_circ_added_hop(origin_circuit_t *on_circ)
+circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ)
 {
   /* Since our padding conditions do not specify a max_hops,
    * all we can do is add machines here */
@@ -1171,7 +1171,7 @@ circpad_event_circ_added_hop(origin_circuit_t *on_circ)
  * Activate any new ones.
  */
 void
-circpad_event_circ_built(origin_circuit_t *circ)
+circpad_machine_event_circ_built(origin_circuit_t *circ)
 {
   circpad_shutdown_old_machines(circ);
   circpad_add_matching_machines(circ);
@@ -1184,7 +1184,7 @@ circpad_event_circ_built(origin_circuit_t *circ)
  * Activate any new ones that do.
  */
 void
-circpad_event_purpose_changed(origin_circuit_t *circ)
+circpad_machine_event_purpose_changed(origin_circuit_t *circ)
 {
   circpad_shutdown_old_machines(circ);
   circpad_add_matching_machines(circ);
@@ -1199,7 +1199,7 @@ circpad_event_purpose_changed(origin_circuit_t *circ)
  * streams. Activate any new ones.
  */
 void
-circpad_event_circ_has_streams(origin_circuit_t *circ)
+circpad_machine_event_circ_has_streams(origin_circuit_t *circ)
 {
   circpad_shutdown_old_machines(circ);
   circpad_add_matching_machines(circ);
@@ -1214,7 +1214,7 @@ circpad_event_circ_has_streams(origin_circuit_t *circ)
  * streams. Activate any new ones.
  */
 void
-circpad_event_circ_has_no_streams(origin_circuit_t *circ)
+circpad_machine_event_circ_has_no_streams(origin_circuit_t *circ)
 {
   circpad_shutdown_old_machines(circ);
   circpad_add_matching_machines(circ);
