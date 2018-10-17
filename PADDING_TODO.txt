@@ -5,8 +5,6 @@ TODO sketch for this branch, in rough priority order:
    machine.
 
 - Clean up/fix XXX's and FIXMEs
-  - Fix dup event callback from code review, verify sane event call-in
-    placement (ie vs circuitmux or other places from #25505)
   - Check token removal: Should only remove toks on "send" events, not recv
   - Verify we're scheduling new padding in sane places
   - Verify event ordering for events that the padding code emits to itself
