@@ -5,18 +5,13 @@ TODO sketch for this branch, in rough priority order:
    machine.
 
 - Clean up/fix XXX's and FIXMEs
-  - Verify event ordering for events that the padding code emits to itself
-    (such as bins empty, padding sent, infinity, etc)
+  - Different termination condition instead of Infinity bin?
   - Generic start state code
     - Start state vs negotiate
-  - Does padding negotiate response need a delay, or just
-    better choice of machine creation conditions?
+  - Rephist timer stats
   - Add tests for detecting padding from wrong hop
   - Add tests for machine replacement
   - Better test coverage in general
-  - Rephist timer stats
-
-- Different termination condition instead of Infinity bin?
 
 - Determine good hardcoded/example histograms
 
