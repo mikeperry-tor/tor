@@ -118,6 +118,8 @@ typedef enum {
   /** Remove from the closest bin by time value (since bins are
    *  exponentially spaced). */
   CIRCPAD_TOKEN_REMOVAL_CLOSEST_USEC = 4
+  // XXX: Don't remove if zero
+  // XXX: Refill if any bin is zero
 } circpad_removal_t;
 
 /** The maximum length any histogram can be. */
@@ -153,10 +155,11 @@ typedef struct circpad_state_t {
   uint16_t histogram[CIRCPAD_MAX_HISTOGRAM_LEN];
   /** total number of tokens */
   uint32_t histogram_total;
-  /** microseconds of the first bin of histogram */
+
+  /** Microseconds of the first bin of histogram, or base of iat dist */
   uint32_t start_usec;
-  /** the time value of the last bin of the histogram.
-      so together they define the span of the delay */
+  /** The span of the histogram in seconds, used to calculate bin with.
+   *  For iat dist use, this is used as a max delay cap on the distribution. */
   uint16_t range_sec;
 
   /**
@@ -184,7 +187,9 @@ typedef struct circpad_state_t {
   /** The maximum length that can be set */
   uint64_t max_length;
 
-  /** Should we decrement length when we see a nonpadding packet? */
+  /** Should we decrement length when we see a nonpadding packet?
+   * XXX: Are there any machines that actually want to set this to 0? There may
+   * not be. OTOH, it's only a bit.. */
   uint8_t length_includes_nonpadding : 1;
 
   /**
@@ -244,7 +249,12 @@ typedef struct circpad_machineinfo_t {
   /** A mutable copy of the histogram for the current state.
    *  NULL if remove_tokens is false for that state */
   uint16_t *histogram;
-  /** Length of the above histogram */
+  /** Length of the above histogram.
+   * XXX: This field *could* be removed at the expense of added
+   * complexity+overhead for reaching back into the immutable machine
+   * state every time we need to inspect the histogram. It's only a byte,
+   * though, so it seemed worth it.
+   */
   uint8_t histogram_len;
   /** Remove token from this index upon sending padding */
   uint8_t chosen_bin;
@@ -252,6 +262,14 @@ typedef struct circpad_machineinfo_t {
   /** Stop padding/transition if this many cells sent */
   uint64_t state_length;
 #define CIRCPAD_STATE_LENGTH_INFINITE UINT64_MAX
+
+  /** A scaled acount of padding packets sent, used to limit padding overhead.
+   * When this reaches UINT16_MAX, we cut it and nonpadding_sent in half. */
+  uint16_t padding_sent;
+  /** A scaled acount of non-padding packets sent, used to limit padding
+   *  overhead. When this reaches UINT16_MAX, we cut it and padding_sent in
+   *  half. */
+  uint16_t nonpadding_sent;
 
   /** What state is this machine in? */
   circpad_statenum_t current_state;
@@ -321,20 +339,31 @@ typedef struct circpad_machine_t {
   /** Global machine number */
   circpad_machine_num_t machine_num;
 
-  // XXX: These next three fields are origin machine-only...
-  /** This machine can only kill fascists if the right conditions are met. */
-  circpad_machine_conditions_t conditions;
-
-  /** Origin side or relay side */
-  uint8_t origin_side : 1;
-
   /** Which machine index slot should this machine go into in
    *  the array on the circuit_t */
   uint8_t machine_index : 1;
 
+  // XXX: These next three fields are origin machine-only...
+  /** Origin side or relay side */
+  uint8_t origin_side : 1;
+
   /** Which hop in the circuit should we send padding to/from?
    *  1-indexed (ie: hop #1 is guard, #2 middle, #3 exit). */
   uint8_t target_hopnum : 3;
+
+  /** This machine can only kill fascists if the right conditions are met. */
+  circpad_machine_conditions_t conditions;
+
+  /** How many padding cells can be sent before we apply overhead limits?
+   * XXX: Note that we can only allow up to 64k of padding cells on an
+   * otherwise quiet circuit. Is this enough? It's 33MB. */
+  uint16_t allowed_padding_count;
+
+  /** Padding percent cap: Stop padding if we exceed this percent overhead.
+   * 0 means no limit. Overhead is defined as percent of total traffic, so
+   * that we can use 0..100 here.
+   * XXX: Does this make sense in terms of consensus weights? */
+  uint8_t max_padding_percent;
 
   /** Transition to the burst state (from start) on the events that are set
    *  in this bitfield */
@@ -389,6 +418,8 @@ typedef enum {
   CIRCPAD_PADDING_SCHEDULED,
   CIRCPAD_PADDING_SENT
 } circpad_decision_t;
+
+void circpad_new_consensus_params(networkstatus_t *ns);
 
 /**
  * The following are event call-in points that are of interest to

@@ -9,6 +9,7 @@
 #include "core/or/circuituse.h"
 #include "core/or/relay.h"
 #include "feature/stats/rephist.h"
+#include "feature/nodelist/networkstatus.h"
 
 #include "core/or/channel.h"
 
@@ -62,6 +63,10 @@ static void circpad_circuit_machineinfo_free_idx(circuit_t *circ, int idx);
 static void circpad_setup_machine_on_circ(circuit_t *on_circ,
                                           circpad_machine_t *machine);
 static double circpad_distribution_sample(circpad_distribution_t dist);
+
+/** Cached consensus params */
+uint8_t circpad_per_hop_max_padding_percent;
+uint16_t circpad_per_hop_allowed_cells;
 
 /* Machines for various usecases */
 static smartlist_t *origin_padding_machines = NULL;
@@ -525,6 +530,13 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
   uint64_t target_bin_us;
   uint32_t histogram_total = 0;
 
+  /* Update non-padding counts */
+  mi->nonpadding_sent++;
+  if (mi->nonpadding_sent == UINT16_MAX) {
+    mi->padding_sent /= 2;
+    mi->nonpadding_sent /= 2;
+  }
+
   /* Dont remove any tokens if there was no padding scheduled */
   if (!mi->padding_scheduled_at_us) {
     return;
@@ -619,7 +631,7 @@ circpad_send_command_to_hop(origin_circuit_t *circ, int hopnum,
   }
 
   /* Check that the target hop is opened */
-  if (target_hop->state == CPATH_STATE_OPEN) {
+  if (target_hop->state != CPATH_STATE_OPEN) {
     log_fn(LOG_WARN,LD_CIRC,
            "Padding circuit %u has %d hops, not %d",
            circ->global_identifier,
@@ -666,6 +678,13 @@ circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi)
   if (mi->state_length != CIRCPAD_STATE_LENGTH_INFINITE) {
     tor_assert(mi->state_length > 0);
     mi->state_length--;
+  }
+
+  /* Update padding counts */
+  mi->padding_sent++;
+  if (mi->padding_sent == UINT16_MAX) {
+    mi->padding_sent /= 2;
+    mi->nonpadding_sent /= 2;
   }
 
   log_fn(LOG_INFO,LD_CIRC, "Padding callback. Sending.");
@@ -732,6 +751,71 @@ circpad_send_padding_callback(tor_timer_t *timer, void *args,
 }
 
 /**
+ * Cache our consensus parameters upon consensus update.
+ */
+void
+circpad_new_consensus_params(networkstatus_t *ns)
+{
+  circpad_per_hop_allowed_cells =
+      networkstatus_get_param(ns, "circpad_allowed_cells",
+         0, 0, UINT16_MAX-1);
+
+  circpad_per_hop_max_padding_percent =
+      networkstatus_get_param(ns, "circpad_max_padding_pct",
+         0, 0, 100);
+}
+
+/**
+ * Check this machine against its padding limits, as well as global
+ * consensus limits.
+ *
+ * We have two limits: a percent and a cell count. The cell count
+ * limit must be reached before the percent is enforced (this is to
+ * optionally allow very light padding of things like circuit setup
+ * while there is no other traffic on the circuit).
+ *
+ * The consensus versions are per-hop values, so they must be divided
+ * by target_hopnum.
+ *
+ * Returns 1 if limits are set and we've hit them. Otherwise returns 0.
+ */
+static int
+circpad_machine_reached_padding_limit(circpad_machineinfo_t *mi)
+{
+  const circpad_machine_t *machine = CIRCPAD_GET_MACHINE(mi);
+  uint8_t max_padding_pct;
+  uint16_t allowed_cells;
+
+  /* If consensus parameters have been set, they override the per-machine
+   * values. They are also per-hop, so we must divide them by how many
+   * hops we're using. */
+  if (circpad_per_hop_allowed_cells) {
+    allowed_cells = circpad_per_hop_allowed_cells/machine->target_hopnum;
+  } else {
+    allowed_cells = machine->allowed_padding_count;
+  }
+
+  if (circpad_per_hop_max_padding_percent) {
+    max_padding_pct = circpad_per_hop_max_padding_percent/
+                          machine->target_hopnum;
+  } else {
+    max_padding_pct = machine->max_padding_percent;
+  }
+
+  /* If max_padding_pct is non-zero, enforce limits. We allow up to
+   * allowed_cells before checking limits. After that is exceeded,
+   * the percents apply. */
+  if (max_padding_pct &&
+      mi->padding_sent >= allowed_cells &&
+      (100*mi->padding_sent) / (mi->padding_sent + mi->nonpadding_sent) >
+        max_padding_pct) {
+    return 1; // limit is reached. Stop.
+  }
+
+  return 0; // All good!
+}
+
+/**
  * Schedule the next padding time according to the machineinfo on a
  * circuit.
  *
@@ -745,6 +829,13 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
   uint32_t in_us = 0;
   struct timeval timeout;
   tor_assert(mi);
+
+  /* Check our padding limits */
+  if (circpad_machine_reached_padding_limit(mi)) {
+    // XXX: Log circ id? for origin circuits we have one. Don't for middles.
+    log_fn(LOG_INFO, LD_CIRC, "Padding machine has reached padding limit.");
+    return CIRCPAD_WONTPAD_INFINITY;
+  }
 
   log_fn(LOG_INFO, LD_CIRC, "Scheduling padding?");
   if (mi->padding_timer_scheduled) {
