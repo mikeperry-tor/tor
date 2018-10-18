@@ -1,6 +1,8 @@
 /* Copyright (c) 2017 The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
+#include <math.h>
+#include "lib/math/fp.h"
 #include "core/or/or.h"
 #include "core/or/circuitpadding.h"
 #include "core/or/circuitlist.h"
@@ -59,6 +61,7 @@ static inline circpad_circuit_state_t circpad_circuit_state(
 static void circpad_circuit_machineinfo_free_idx(circuit_t *circ, int idx);
 static void circpad_setup_machine_on_circ(circuit_t *on_circ,
                                           circpad_machine_t *machine);
+static double circpad_distribution_sample(circpad_distribution_t dist);
 
 /* Machines for various usecases */
 static smartlist_t *origin_padding_machines = NULL;
@@ -177,6 +180,28 @@ circpad_machine_setup_tokens(circpad_machineinfo_t *mi)
 }
 
 /**
+ * Choose a length for this state (in cells), if specified.
+ */
+static void
+circpad_choose_state_length(circpad_machineinfo_t *mi)
+{
+  const circpad_state_t *state = circpad_machine_current_state(mi);
+  double length;
+
+  if (!state || state->length_dist.type == CIRCPAD_DIST_NONE) {
+    mi->state_length = CIRCPAD_STATE_LENGTH_INFINITE;
+    return;
+  }
+
+  length = circpad_distribution_sample(state->length_dist);
+  length = MAX(0, length);
+  length += state->start_length;
+  length = MIN(length, state->max_length);
+
+  mi->state_length = clamp_double_to_int64(length);
+}
+
+/**
  * Sample an expected time-until-next-packet delay from the histogram.
  *
  * The bin is chosen with probability proportional to the number
@@ -197,14 +222,31 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
   tor_assert(state);
 
   if (state->token_removal != CIRCPAD_TOKEN_REMOVAL_NONE) {
+    /* We have a mutable histogram */
     tor_assert(mi->histogram && mi->histogram_len == state->histogram_len);
 
     histogram = mi->histogram;
     for (int b = 0; b < state->histogram_len; b++)
       histogram_total += histogram[b];
-  } else {
+  } else if (state->iat_dist.type == CIRCPAD_DIST_NONE) {
+    /* We have a histogram, but it's immutable */
     histogram = state->histogram;
     histogram_total = state->histogram_total;
+  } else {
+    /* Sample from a fixed IAT distribution and return */
+    // XXX: Should we scale the distribution from secs to/from usecs,
+    // or just use it raw? Is one better than the other?
+    double val = circpad_distribution_sample(state->iat_dist);
+    uint32_t start_usec;
+    if (state->use_rtt_estimate)
+      start_usec = mi->rtt_estimate+state->start_usec;
+    else
+      start_usec = state->start_usec;
+    val = MAX(0, val);
+    val = MIN(val, state->range_sec*USEC_PER_SEC);
+
+    val += start_usec;
+    return tor_lround(val);
   }
 
   bin_choice = crypto_rand_int(histogram_total);
@@ -231,11 +273,10 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
     mi->chosen_bin = i;
   }
 
-  /* XXX-circpad_event: Should we even decrement the infinity bin? */
   if (i == state->histogram_len-1) {
     fprintf(stderr, "Infinity pad!\n");
-    if (state->token_removal != CIRCPAD_TOKEN_REMOVAL_NONE) {
-      tor_assert(mi->histogram[i] > 0);
+    if (state->token_removal != CIRCPAD_TOKEN_REMOVAL_NONE &&
+        mi->histogram[i] > 0) {
       mi->histogram[i]--;
     }
 
@@ -251,6 +292,40 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
 
   // Sample uniformly between histogram[i] to histogram[i+1]-1
   return bin_start + crypto_rand_int(bin_end - bin_start);
+}
+
+/**
+ * Sample a value from the specified probability distribution.
+ *
+ * This performs inverse transform sampling
+ * (https://en.wikipedia.org/wiki/Inverse_transform_sampling).
+ *
+ * XXX: These formulas were taken verbatim. Need a floating wizard
+ * to check them for catastropic cancellation and other issues (teor?)
+ */
+static double
+circpad_distribution_sample(circpad_distribution_t dist)
+{
+  double p = 0;
+
+  switch (dist.type) {
+    case CIRCPAD_DIST_NONE:
+      return 0;
+    case CIRCPAD_DIST_LOGISTIC:
+      p = crypto_rand_double();
+      // https://en.wikipedia.org/wiki/Logistic_distribution#Quantile_function
+      return dist.param1 + dist.param2*tor_mathlog(p/(1.0-p));
+    case CIRCPAD_DIST_LOG_LOGISTIC:
+      p = crypto_rand_double();
+      // https://en.wikipedia.org/wiki/Log-logistic_distribution#Quantiles
+      return dist.param1 * pow(p/(1.0-p), 1.0/dist.param2);
+    case CIRCPAD_DIST_GEOMETRIC:
+      p = crypto_rand_double();
+      // https://github.com/distributions-io/geometric-quantile/
+      return ceil(tor_mathlog(1.0-p)/tor_mathlog(1.0-dist.param1));
+    // XXX: Is uniform or fixed value useful here? Maybe..
+  }
+  return 0;
 }
 
 /**
@@ -467,16 +542,24 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
     timer_disable(mi->padding_timer);
   }
 
-  /* If we are not in a padding state (like start or end) or if we are not
-   * removing tokens we dont need to do any of that */
-  if (!state || state->token_removal == CIRCPAD_TOKEN_REMOVAL_NONE)
+  /* If we are not in a padding state (like start or end), we're done */
+  if (!state)
     return;
 
-  tor_assert(mi->histogram && mi->histogram_len == state->histogram_len);
+  /* If we're enforcing a state length on non-padding packets,
+   * decrement it */
+  if (mi->state_length != CIRCPAD_STATE_LENGTH_INFINITE &&
+      state->length_includes_nonpadding &&
+      mi->state_length > 0) {
+    mi->state_length--;
+  }
 
   /* Perform the specified token removal strategy */
   switch (state->token_removal) {
     case CIRCPAD_TOKEN_REMOVAL_NONE:
+      if (mi->state_length == 0) {
+        circpad_event_state_length_up(mi);
+      }
       return;
     case CIRCPAD_TOKEN_REMOVAL_CLOSEST_USEC:
       circpad_machine_remove_closest_token(mi, target_bin_us, 1);
@@ -501,6 +584,10 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
 
   if (histogram_total == 0) {
     circpad_event_bins_empty(mi);
+  }
+
+  if (mi->state_length == 0) {
+    circpad_event_state_length_up(mi);
   }
 }
 
@@ -578,6 +665,11 @@ circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi)
     mi->histogram[mi->chosen_bin]--;
   }
 
+  if (mi->state_length != CIRCPAD_STATE_LENGTH_INFINITE) {
+    tor_assert(mi->state_length > 0);
+    mi->state_length--;
+  }
+
   log_fn(LOG_INFO,LD_CIRC, "Padding callback. Sending.");
 
   if (CIRCUIT_IS_ORIGIN(mi->on_circ)) {
@@ -606,6 +698,10 @@ circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi)
     if (histogram_total == 0) {
       circpad_event_bins_empty(mi);
     }
+  }
+
+  if (mi->state_length == 0) {
+    circpad_event_state_length_up(mi);
   }
 }
 
@@ -653,6 +749,12 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
   tor_assert(mi);
 
   log_fn(LOG_INFO, LD_CIRC, "Scheduling padding?");
+  if (mi->padding_timer_scheduled) {
+    /* Cancel current timer (if any) */
+    timer_disable(mi->padding_timer);
+    mi->padding_timer_scheduled = 0;
+  }
+
   // Don't pad in either state start or end (but
   // also don't cancel any previously scheduled padding
   // either).
@@ -662,30 +764,32 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
     return CIRCPAD_NONPADDING_STATE;
   }
 
-  if (mi->padding_timer_scheduled) {
-    /* Cancel current timer (if any) */
-    timer_disable(mi->padding_timer);
-    mi->padding_timer_scheduled = 0;
-  }
-
   /* in_us = in microseconds */
   in_us = circpad_machine_sample_delay(mi);
-
   log_fn(LOG_INFO,LD_CIRC,"Padding in %u usec\n", in_us);
+
+  // Don't schedule if we have infinite delay.
+  if (in_us == CIRCPAD_DELAY_INFINITE) {
+    mi->padding_scheduled_at_us = monotime_absolute_usec();
+    circpad_event_infinity(mi);
+    return CIRCPAD_WONTPAD_INFINITY;
+  }
+
+  if (mi->state_length == 0) {
+    /* If we're at length 0, that means we hit 0 after sending
+     * a cell earlier, and emitted an event for it, but
+     * for whatever reason we did not decide to change states then.
+     * So maybe the machine is waiting for bins empty, or for an
+     * infinity event later? That would be a strange machine,
+     * but there's no reason to make it impossible. */
+    mi->padding_scheduled_at_us = monotime_absolute_usec();
+    return CIRCPAD_WONTPAD_INFINITY;
+  }
 
   if (in_us <= 0) {
     mi->padding_scheduled_at_us = monotime_absolute_usec();
     circpad_send_padding_cell_for_callback(mi);
     return CIRCPAD_PADDING_SENT;
-  }
-
-  // Don't schedule if we have infinite delay.
-  if (in_us == CIRCPAD_DELAY_INFINITE) {
-    // XXX-circpad_event: Return differently if we transition or not?
-    // XXX: Don't count infinity bin for bins empty? Do we still
-    // decrement tokens?
-    circpad_event_infinity(mi);
-    return CIRCPAD_WONTPAD_INFINITY;
   }
 
   timeout.tv_sec = in_us/USEC_PER_SEC;
@@ -745,11 +849,13 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
       if (CIRCPAD_GET_MACHINE(mi)->transition_burst_events & event) {
         mi->current_state = CIRCPAD_STATE_BURST;
         circpad_machine_setup_tokens(mi);
+        circpad_choose_state_length(mi);
         return circpad_machine_schedule_padding(mi);
       }
       if (CIRCPAD_GET_MACHINE(mi)->transition_gap_events & event) {
         mi->current_state = CIRCPAD_STATE_GAP;
         circpad_machine_setup_tokens(mi);
+        circpad_choose_state_length(mi);
         return circpad_machine_schedule_padding(mi);
       }
     }
@@ -783,6 +889,7 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
       if (mi->current_state != s) {
         mi->current_state = s;
         circpad_machine_setup_tokens(mi);
+        circpad_choose_state_length(mi);
       }
 
       return circpad_machine_schedule_padding(mi);
@@ -1003,10 +1110,21 @@ circpad_event_infinity(circpad_machineinfo_t *mi)
 void
 circpad_event_bins_empty(circpad_machineinfo_t *mi)
 {
-  if (!circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_BINS_EMPTY)) {
-    /* If we dont transition, then we refill the tokens */
+  if (circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_BINS_EMPTY)
+      == CIRCPAD_WONTPAD_EVENT) {
+    /* If we dont transition (aka won't pad), then we refill the tokens */
     circpad_machine_setup_tokens(mi);
   }
+}
+
+/**
+ * This state has used up its cell count. Emit the event and
+ * see if we transition.
+ */
+void
+circpad_event_state_length_up(circpad_machineinfo_t *mi)
+{
+  circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_LENGTH_COUNT);
 }
 
 /**
@@ -1042,7 +1160,8 @@ circpad_circuit_state(origin_circuit_t *circ)
   if (circ->p_streams)
     return CIRCPAD_CIRC_STREAMS;
 
-  if (TO_CIRCUIT(circ)->state == CIRCUIT_STATE_OPEN)
+  /* We use has_opened to prevent cannibialized circs from flapping. */
+  if (circ->has_opened)
     return CIRCPAD_CIRC_OPENED;
 
   return CIRCPAD_CIRC_BUILDING;

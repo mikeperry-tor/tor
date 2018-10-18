@@ -48,7 +48,8 @@ typedef enum {
   CIRCPAD_TRANSITION_ON_PADDING_SENT = 1<<2,
   CIRCPAD_TRANSITION_ON_PADDING_RECV = 1<<3,
   CIRCPAD_TRANSITION_ON_INFINITY = 1<<4,
-  CIRCPAD_TRANSITION_ON_BINS_EMPTY = 1<<5
+  CIRCPAD_TRANSITION_ON_BINS_EMPTY = 1<<5,
+  CIRCPAD_TRANSITION_ON_LENGTH_COUNT = 1<<6
 } circpad_transition_t;
 
 /**
@@ -122,6 +123,20 @@ typedef enum {
 /** The maximum length any histogram can be. */
 #define CIRCPAD_MAX_HISTOGRAM_LEN 50
 
+/** Distribution type */
+typedef enum {
+  CIRCPAD_DIST_NONE = 0,
+  CIRCPAD_DIST_LOGISTIC = 1,
+  CIRCPAD_DIST_LOG_LOGISTIC = 2,
+  CIRCPAD_DIST_GEOMETRIC = 3
+} circpad_distribution_type_t;
+
+typedef struct circpad_distribution_t {
+  circpad_distribution_type_t type;
+  double param1;
+  double param2;
+} circpad_distribution_t;
+
 /**
  * A circuit padding state machine state.
  *
@@ -143,6 +158,34 @@ typedef struct circpad_state_t {
   /** the time value of the last bin of the histogram.
       so together they define the span of the delay */
   uint16_t range_sec;
+
+  /**
+   * The iat_dist is a parametrized way of encoding inter-packet delay
+   * information. It can be used instead of histograms. If it is used,
+   * token_removal below must be set to CIRCPAD_TOKEN_REMOVAL_NONE.
+   * Start_usec, range_sec, and rtt_estimates are still applied to the
+   * results of sampling from this distribution (range_sec is used as a max).
+   */
+  circpad_distribution_t iat_dist;
+
+  /**
+   * The length dist is a parameterized way of encoding how long this
+   * state machine runs in terms of sent padding packets or all
+   * sent packets. Values are sampled from this distribution, clamped
+   * to max_len, and then start_len is added to that value.
+   *
+   * It may be specified instead of or in addition to
+   * the infinity bins and bins empty conditions. */
+  circpad_distribution_t length_dist;
+
+  /** A minimum length value, added to the output of length_dist */
+  uint16_t start_length;
+
+  /** The maximum length that can be set */
+  uint64_t max_length;
+
+  /** Should we decrement length when we see a nonpadding packet? */
+  uint8_t length_includes_nonpadding : 1;
 
   /**
    * This is a bitfield that specifies which direction and types
@@ -205,6 +248,10 @@ typedef struct circpad_machineinfo_t {
   uint8_t histogram_len;
   /** Remove token from this index upon sending padding */
   uint8_t chosen_bin;
+
+  /** Stop padding/transition if this many cells sent */
+  uint64_t state_length;
+#define CIRCPAD_STATE_LENGTH_INFINITE UINT64_MAX
 
   /** What state is this machine in? */
   circpad_statenum_t current_state;
@@ -287,7 +334,7 @@ typedef struct circpad_machine_t {
 
   /** Which hop in the circuit should we send padding to/from?
    *  1-indexed (ie: hop #1 is guard, #2 middle, #3 exit). */
-  uint8_t target_hopnum : 4;
+  uint8_t target_hopnum : 3;
 
   /** Transition to the burst state (from start) on the events that are set
    *  in this bitfield */
@@ -362,6 +409,7 @@ void circpad_event_padding_received(circuit_t *on_circ);
 
 void circpad_event_infinity(circpad_machineinfo_t *mi);
 void circpad_event_bins_empty(circpad_machineinfo_t *mi);
+void circpad_event_state_length_up(circpad_machineinfo_t *mi);
 
 /** Machine creation events */
 void circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ);
