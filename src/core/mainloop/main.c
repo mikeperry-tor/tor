@@ -3549,9 +3549,10 @@ tor_init(int argc, char *argv[])
   /* The options are now initialised */
   const or_options_t *options = get_options();
 
-  /* Initialize channelpadding parameters to defaults until we get
-   * a consensus */
+  /* Initialize channelpadding and circpad parameters to defaults
+   * until we get a consensus */
   channelpadding_new_consensus_params(NULL);
+  circpad_new_consensus_params(NULL);
 
   /* Initialize circuit padding to defaults+torrc until we get a consensus */
   circpad_machines_init();
