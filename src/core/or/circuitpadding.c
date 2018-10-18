@@ -618,10 +618,8 @@ circpad_send_command_to_hop(origin_circuit_t *circ, int hopnum,
     return -1;
   }
 
-  /* Check that enough hops are opened.
-   * XXX: I think we can just check the target_hop state
-   * directly and it's equivalent? */
-  if (circuit_get_cpath_opened_len(circ) < hopnum) {
+  /* Check that the target hop is opened */
+  if (target_hop->state == CPATH_STATE_OPEN) {
     log_fn(LOG_WARN,LD_CIRC,
            "Padding circuit %u has %d hops, not %d",
            circ->global_identifier,
