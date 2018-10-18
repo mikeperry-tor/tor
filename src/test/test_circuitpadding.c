@@ -810,7 +810,7 @@ test_circuitpadding_circuitsetup_machine(void *arg)
 
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
-  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
+  tt_int_op(relay_side->padding_info[0]->padding_timer_scheduled,
             OP_EQ, 0);
   event_base_loop(tor_libevent_get_base(), 0);
   tt_int_op(n_client_cells, OP_EQ, 2);
