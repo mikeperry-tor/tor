@@ -5,10 +5,11 @@ TODO sketch for this branch, in rough priority order:
    machine.
 
 - Clean up/fix XXX's and FIXMEs
-  - Different termination condition instead of Infinity bin?
   - Generic start state code
     - Start state vs negotiate
   - Rephist timer stats
+  - Better assert/BUG usage
+  - Add tests for dists, length and iat sampling
   - Add tests for detecting padding from wrong hop
   - Add tests for machine replacement
   - Better test coverage in general
