@@ -117,9 +117,10 @@ typedef enum {
   CIRCPAD_TOKEN_REMOVAL_CLOSEST = 3,
   /** Remove from the closest bin by time value (since bins are
    *  exponentially spaced). */
-  CIRCPAD_TOKEN_REMOVAL_CLOSEST_USEC = 4
-  // XXX: Don't remove if zero
-  // XXX: Refill if any bin is zero
+  CIRCPAD_TOKEN_REMOVAL_CLOSEST_USEC = 4,
+  /** Only remove from the exact bin corresponding to this delay. If
+   *  the bin is 0, simply do nothing. Don't pick another bin. */
+  CIRCPAD_TOKEN_REMOVAL_EXACT = 5
 } circpad_removal_t;
 
 /** The maximum length any histogram can be. */
@@ -128,9 +129,12 @@ typedef enum {
 /** Distribution type */
 typedef enum {
   CIRCPAD_DIST_NONE = 0,
-  CIRCPAD_DIST_LOGISTIC = 1,
-  CIRCPAD_DIST_LOG_LOGISTIC = 2,
-  CIRCPAD_DIST_GEOMETRIC = 3
+  CIRCPAD_DIST_UNIFORM = 1,
+  CIRCPAD_DIST_LOGISTIC = 2,
+  CIRCPAD_DIST_LOG_LOGISTIC = 3,
+  CIRCPAD_DIST_GEOMETRIC = 4,
+  CIRCPAD_DIST_WEIBULL = 5,
+  CIRCPAD_DIST_PARETO = 6
 } circpad_distribution_type_t;
 
 typedef struct circpad_distribution_t {

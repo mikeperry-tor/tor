@@ -144,7 +144,9 @@ circpad_histogram_usec_to_bin(circpad_machineinfo_t *mi, uint32_t us)
     tor_log2((state->range_sec*USEC_PER_SEC)/(us-start_usec+1))-1;
 
   /* Clamp the return value to account for timevals before the start
-   * of bin 0, or after the last bin */
+   * of bin 0, or after the last bin. */
+  // XXX: Maybe this function should never return the infinity bin?
+  // I think all of its callers check for that and ignore it.
   if (bin >= state->histogram_len || bin < 0) {
     bin = MIN(MAX(bin, 0), state->histogram_len-1);
   }
@@ -306,7 +308,8 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
  * (https://en.wikipedia.org/wiki/Inverse_transform_sampling).
  *
  * XXX: These formulas were taken verbatim. Need a floating wizard
- * to check them for catastropic cancellation and other issues (teor?)
+ * to check them for catastropic cancellation and other issues (teor?).
+ * Also: is 32bits of double from [0.0,1.0) enough?
  */
 static double
 circpad_distribution_sample(circpad_distribution_t dist)
@@ -316,19 +319,46 @@ circpad_distribution_sample(circpad_distribution_t dist)
   switch (dist.type) {
     case CIRCPAD_DIST_NONE:
       return 0;
+    case CIRCPAD_DIST_UNIFORM:
+      p = crypto_rand_double();
+      // param2 is upper bound, param1 is lower
+      p *= (dist.param2 - dist.param1);
+      p += dist.param1;
+      return p;
     case CIRCPAD_DIST_LOGISTIC:
       p = crypto_rand_double();
-      // https://en.wikipedia.org/wiki/Logistic_distribution#Quantile_function
+      /* https://en.wikipedia.org/wiki/Logistic_distribution#Quantile_function
+       * param1 is Mu, param2 is s. */
+      if (p <= 0.0) // Avoid log(0)
+        return 0;
       return dist.param1 + dist.param2*tor_mathlog(p/(1.0-p));
     case CIRCPAD_DIST_LOG_LOGISTIC:
       p = crypto_rand_double();
-      // https://en.wikipedia.org/wiki/Log-logistic_distribution#Quantiles
+      /* https://en.wikipedia.org/wiki/Log-logistic_distribution#Quantiles
+       * param1 is Alpha, param2 is Beta */
       return dist.param1 * pow(p/(1.0-p), 1.0/dist.param2);
     case CIRCPAD_DIST_GEOMETRIC:
       p = crypto_rand_double();
-      // https://github.com/distributions-io/geometric-quantile/
+      /* https://github.com/distributions-io/geometric-quantile/
+       * param1 is 'p' (success probability) */
       return ceil(tor_mathlog(1.0-p)/tor_mathlog(1.0-dist.param1));
-    // XXX: Is uniform or fixed value useful here? Maybe..
+    case CIRCPAD_DIST_WEIBULL:
+      p = crypto_rand_double();
+      /* https://en.wikipedia.org/wiki/Weibull_distribution \
+       *    #Cumulative_distribution_function
+       * param1 is k, param2 is Lambda */
+      return dist.param2*pow(-tor_mathlog(1.0-p), 1.0/dist.param1);
+    case CIRCPAD_DIST_PARETO:
+      p = 1.0-crypto_rand_double(); // Pareto quantile needs (0,1]
+
+      /* https://en.wikipedia.org/wiki/Generalized_Pareto_distribution \
+       *    #Generating_generalized_Pareto_random_variables
+       * param1 is Sigma, param2 is Xi
+       * Since it's piecewise, we must define it for 0 (or close to 0) */
+      if (fabs(dist.param2) <= 1.0/UINT32_MAX)
+        return -dist.param1*tor_mathlog(p);
+      else
+        return dist.param1*(pow(p, -dist.param2) - 1.0)/dist.param2;
   }
   return 0;
 }
@@ -519,6 +549,28 @@ circpad_machine_remove_closest_token(circpad_machineinfo_t *mi,
 }
 
 /**
+ * Remove a token from the exact bin corresponding to the target.
+ *
+ * If it is empty, do nothing.
+ */
+static void
+circpad_machine_remove_exact(circpad_machineinfo_t *mi,
+                             uint64_t target_bin_us)
+{
+  int bin = circpad_histogram_usec_to_bin(mi, target_bin_us);
+
+  /* Don't remove from the infinity bin */
+  // XXX: Omg this can underflow here and elsehwere if histogram_len is 1
+  // (ie just infinity).
+  if (bin >= mi->histogram_len-1) {
+    bin = mi->histogram_len-2;
+  }
+
+  if (mi->histogram[bin])
+    mi->histogram[bin]--;
+}
+
+/**
  * Remove a token from the bin corresponding to the delta since
  * last packet. If that bin is empty, choose a token based on
  * the specified removal strategy in the state machine. */
@@ -582,6 +634,9 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
       break;
     case CIRCPAD_TOKEN_REMOVAL_HIGHER:
       circpad_machine_remove_higher_token(mi, target_bin_us);
+      break;
+    case CIRCPAD_TOKEN_REMOVAL_EXACT:
+      circpad_machine_remove_exact(mi, target_bin_us);
       break;
   }
 
