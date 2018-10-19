@@ -296,11 +296,11 @@ test_circuitpadding_rtt(void *arg)
   circpad_event_nonpadding_sent((circuit_t*)relay_side);
   tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
-  tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_GE, 19000);
-  tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_LE, 30000);
+  tt_int_op(relay_side->padding_info[0]->rtt_estimate_us, OP_GE, 19000);
+  tt_int_op(relay_side->padding_info[0]->rtt_estimate_us, OP_LE, 30000);
   tt_int_op(circpad_histogram_bin_to_usec(relay_side->padding_info[0], 0),
             OP_EQ,
-            relay_side->padding_info[0]->rtt_estimate+
+            relay_side->padding_info[0]->rtt_estimate_us+
             circpad_machine_current_state(
              relay_side->padding_info[0])->start_usec);
 
@@ -312,28 +312,28 @@ test_circuitpadding_rtt(void *arg)
   circpad_event_nonpadding_sent((circuit_t*)relay_side);
   tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
-  tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_GE, 29000);
-  tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_LE, 50000);
+  tt_int_op(relay_side->padding_info[0]->rtt_estimate_us, OP_GE, 29000);
+  tt_int_op(relay_side->padding_info[0]->rtt_estimate_us, OP_LE, 50000);
   tt_int_op(circpad_histogram_bin_to_usec(relay_side->padding_info[0], 0),
             OP_EQ,
-            relay_side->padding_info[0]->rtt_estimate+
+            relay_side->padding_info[0]->rtt_estimate_us+
             circpad_machine_current_state(
              relay_side->padding_info[0])->start_usec);
 
   /* Test 2: Termination of RTT measurement (from the previous test) */
   tt_int_op(relay_side->padding_info[0]->stop_rtt_update, OP_EQ, 1);
-  rtt_estimate = relay_side->padding_info[0]->rtt_estimate;
+  rtt_estimate = relay_side->padding_info[0]->rtt_estimate_us;
 
   circpad_event_nonpadding_received((circuit_t*)relay_side);
   tor_sleep_msec(4);
   circpad_event_nonpadding_sent((circuit_t*)relay_side);
 
-  tt_int_op(relay_side->padding_info[0]->rtt_estimate, OP_EQ, rtt_estimate);
+  tt_int_op(relay_side->padding_info[0]->rtt_estimate_us, OP_EQ, rtt_estimate);
   tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
   tt_int_op(relay_side->padding_info[0]->stop_rtt_update, OP_EQ, 1);
   tt_int_op(circpad_histogram_bin_to_usec(relay_side->padding_info[0], 0),
             OP_EQ,
-            relay_side->padding_info[0]->rtt_estimate+
+            relay_side->padding_info[0]->rtt_estimate_us+
             circpad_machine_current_state(
              relay_side->padding_info[0])->start_usec);
 
@@ -345,9 +345,9 @@ test_circuitpadding_rtt(void *arg)
   circpad_event_nonpadding_sent((circuit_t*)client_side);
   tt_int_op(client_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
-  tt_int_op(client_side->padding_info[0]->rtt_estimate, OP_EQ, 0);
+  tt_int_op(client_side->padding_info[0]->rtt_estimate_us, OP_EQ, 0);
   tt_int_op(circpad_histogram_bin_to_usec(client_side->padding_info[0], 0),
-            OP_NE, client_side->padding_info[0]->rtt_estimate);
+            OP_NE, client_side->padding_info[0]->rtt_estimate_us);
   tt_int_op(circpad_histogram_bin_to_usec(client_side->padding_info[0], 0),
             OP_EQ,
             circpad_machine_current_state(
