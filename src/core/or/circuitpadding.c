@@ -355,7 +355,7 @@ circpad_distribution_sample(circpad_distribution_t dist)
        *    #Generating_generalized_Pareto_random_variables
        * param1 is Sigma, param2 is Xi
        * Since it's piecewise, we must define it for 0 (or close to 0) */
-      if (fabs(dist.param2) <= 1.0/UINT32_MAX)
+      if (fabs(dist.param2) <= 1e-22)
         return -dist.param1*tor_mathlog(p);
       else
         return dist.param1*(pow(p, -dist.param2) - 1.0)/dist.param2;
