@@ -577,8 +577,8 @@ circpad_machine_remove_exact(circpad_machineinfo_t *mi,
 void
 circpad_machine_remove_token(circpad_machineinfo_t *mi)
 {
-  const circpad_state_t *state = circpad_machine_current_state(mi);
-  uint64_t current_time = monotime_absolute_usec();
+  const circpad_state_t *state = NULL;
+  uint64_t current_time;
   uint64_t target_bin_us;
   uint32_t histogram_total = 0;
 
@@ -593,6 +593,9 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
   if (!mi->padding_scheduled_at_us) {
     return;
   }
+
+  state = circpad_machine_current_state(mi);
+  current_time = monotime_absolute_usec();
 
   /* If we have scheduled padding some time in the future, we want to see what
      bin we are in at the current time */
