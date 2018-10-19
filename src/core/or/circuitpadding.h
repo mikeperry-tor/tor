@@ -267,21 +267,18 @@ typedef struct circpad_machineinfo_t {
   uint64_t state_length;
 #define CIRCPAD_STATE_LENGTH_INFINITE UINT64_MAX
 
-  /** A scaled acount of padding packets sent, used to limit padding overhead.
+  /** A scaled count of padding packets sent, used to limit padding overhead.
    * When this reaches UINT16_MAX, we cut it and nonpadding_sent in half. */
   uint16_t padding_sent;
-  /** A scaled acount of non-padding packets sent, used to limit padding
+  /** A scaled count of non-padding packets sent, used to limit padding
    *  overhead. When this reaches UINT16_MAX, we cut it and padding_sent in
    *  half. */
   uint16_t nonpadding_sent;
 
-  /** What state is this machine in? */
-  circpad_statenum_t current_state;
-
   /**
    * EWMA estimate of the RTT of the circuit from this hop
-   * to the exit end. */
-  uint32_t rtt_estimate;
+   * to the exit end, in microseconds. */
+  uint32_t rtt_estimate_us;
 
   /**
    * The last time we got an event relevant to estimating
@@ -298,6 +295,9 @@ typedef struct circpad_machineinfo_t {
    * This is 0 if we haven't chosen a padding delay.
    */
   uint64_t padding_scheduled_at_us;
+
+  /** What state is this machine in? */
+  ENUM_BF(circpad_statenum_t) current_state : 2;
 
   /**
    * True if we have scheduled a timer for padding.

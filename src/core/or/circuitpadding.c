@@ -112,7 +112,7 @@ circpad_histogram_bin_to_usec(circpad_machineinfo_t *mi, int bin)
   uint32_t start_usec;
 
   if (state->use_rtt_estimate)
-    start_usec = mi->rtt_estimate+state->start_usec;
+    start_usec = mi->rtt_estimate_us+state->start_usec;
   else
     start_usec = state->start_usec;
 
@@ -135,7 +135,7 @@ circpad_histogram_usec_to_bin(circpad_machineinfo_t *mi, uint32_t us)
   int bin;
 
   if (state->use_rtt_estimate)
-    start_usec = mi->rtt_estimate+state->start_usec;
+    start_usec = mi->rtt_estimate_us+state->start_usec;
   else
     start_usec = state->start_usec;
 
@@ -248,7 +248,7 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
     double val = circpad_distribution_sample(state->iat_dist);
     uint32_t start_usec;
     if (state->use_rtt_estimate)
-      start_usec = mi->rtt_estimate+state->start_usec;
+      start_usec = mi->rtt_estimate_us+state->start_usec;
     else
       start_usec = state->start_usec;
     val = MAX(0, val);
@@ -1063,7 +1063,7 @@ circpad_estimate_circ_rtt_on_received(circuit_t *circ,
            "Stopping padding RTT estimation on circuit (%"PRIu64
            ", %d) after two back to back packets. Current RTT: %d",
            circ->n_chan ?  circ->n_chan->global_identifier : 0,
-           circ->n_circ_id, mi->rtt_estimate);
+           circ->n_circ_id, mi->rtt_estimate_us);
        mi->stop_rtt_update = 1;
     }
   } else {
@@ -1109,12 +1109,12 @@ circpad_estimate_circ_rtt_on_send(circuit_t *circ,
 
     /* If the circuit is opened and we have an RTT estimate, update
      * via an EWMA. */
-    if (circ->state == CIRCUIT_STATE_OPEN && mi->rtt_estimate) {
-      mi->rtt_estimate += (uint32_t)rtt_time;
-      mi->rtt_estimate /= 2;
+    if (circ->state == CIRCUIT_STATE_OPEN && mi->rtt_estimate_us) {
+      mi->rtt_estimate_us += (uint32_t)rtt_time;
+      mi->rtt_estimate_us /= 2;
     } else {
       /* If the circuit is not opened yet, just replace the estimate */
-      mi->rtt_estimate = (uint32_t)rtt_time;
+      mi->rtt_estimate_us = (uint32_t)rtt_time;
     }
   } else if (circ->state == CIRCUIT_STATE_OPEN) {
     /* If last_received_time_us is zero, then we have gotten two cells back
@@ -1123,7 +1123,7 @@ circpad_estimate_circ_rtt_on_send(circuit_t *circ,
      * of var cells during circ setup. */
     mi->stop_rtt_update = 1;
 
-    if (!mi->rtt_estimate) {
+    if (!mi->rtt_estimate_us) {
       log_fn(LOG_NOTICE, LD_CIRC,
              "Got two cells back to back on a circuit before estimating RTT.");
     }
