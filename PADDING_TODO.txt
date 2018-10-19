@@ -5,9 +5,11 @@ TODO sketch for this branch, in rough priority order:
    machine.
 
 - Clean up/fix XXX's and FIXMEs
-  - Generic start state code
-    - Start state vs negotiate
+  - enums can be bitfields in machineinfo_t to save space
+  - rtt_estimate -> rtt_estimate_us
+  - Other XXX's
   - Better assert/BUG usage
+  - Comb over uint64 vs uint32 vs other int usage. Clarify units
   - Add tests for dists, length and iat sampling
   - Add tests for detecting padding from wrong hop
   - Add tests for machine replacement
