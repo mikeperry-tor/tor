@@ -370,7 +370,7 @@ circpad_circ_token_machine_setup(circuit_t *on_circ)
   on_circ->padding_machine[0] = &circ_client_machine;
   on_circ->padding_info[0] = circpad_circuit_machineinfo_new(on_circ, 0);
 
-   circ_client_machine.transition_burst_events =
+   circ_client_machine.start.transition_events[CIRCPAD_STATE_BURST] =
     CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
 
   circ_client_machine.burst.transition_events[CIRCPAD_STATE_BURST] =
