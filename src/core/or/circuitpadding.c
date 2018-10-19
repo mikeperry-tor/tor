@@ -80,9 +80,11 @@ STATIC const circpad_state_t *
 circpad_machine_current_state(circpad_machineinfo_t *machine)
 {
   switch (machine->current_state) {
-    case CIRCPAD_STATE_START:
     case CIRCPAD_STATE_END:
       return NULL;
+
+    case CIRCPAD_STATE_START:
+      return &CIRCPAD_GET_MACHINE(machine)->start;
 
     case CIRCPAD_STATE_BURST:
       return &CIRCPAD_GET_MACHINE(machine)->burst;
@@ -902,11 +904,9 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
     mi->padding_timer_scheduled = 0;
   }
 
-  // Don't pad in either state start or end (but
-  // also don't cancel any previously scheduled padding
-  // either).
-  if (mi->current_state == CIRCPAD_STATE_START ||
-      mi->current_state == CIRCPAD_STATE_END) {
+  // Don't pad in end (but  also don't cancel any previously
+  // scheduled padding either).
+  if (mi->current_state == CIRCPAD_STATE_END) {
     log_fn(LOG_INFO, LD_CIRC, "Padding end state");
     return CIRCPAD_NONPADDING_STATE;
   }
@@ -982,31 +982,10 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
   const circpad_state_t *state =
       circpad_machine_current_state(mi);
 
-  /* XXX can we make the start state transition also generic? Can we
-   * give them a dummy circpad_state_t to combine with the burst+gap
-   * blocks below? */
-
   /* Check start state transitions */
   if (!state) {
-    /* If state is null we are in start state or end state.
-       If we in end state we don't pad no matter what. */
-    if (mi->current_state == CIRCPAD_STATE_START) {
-      /* If we are in start state, first check the burst transition events to
-         see if we should transition to burst */
-      if (CIRCPAD_GET_MACHINE(mi)->transition_burst_events & event) {
-        mi->current_state = CIRCPAD_STATE_BURST;
-        circpad_machine_setup_tokens(mi);
-        circpad_choose_state_length(mi);
-        return circpad_machine_schedule_padding(mi);
-      }
-      if (CIRCPAD_GET_MACHINE(mi)->transition_gap_events & event) {
-        mi->current_state = CIRCPAD_STATE_GAP;
-        circpad_machine_setup_tokens(mi);
-        circpad_choose_state_length(mi);
-        return circpad_machine_schedule_padding(mi);
-      }
-    }
-
+    /* If state is null we are in the end state.
+     * If we in end state we don't pad no matter what. */
     return CIRCPAD_WONTPAD_EVENT;
   }
 
@@ -1697,7 +1676,7 @@ circpad_circ_client_machine_init(void)
   circ_client_machine->target_hopnum = 2;
   circ_client_machine->origin_side = 1;
 
-  circ_client_machine->transition_burst_events =
+  circ_client_machine->start.transition_events[CIRCPAD_STATE_BURST] =
     CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
 
   circ_client_machine->burst.transition_events[CIRCPAD_STATE_BURST] =
@@ -1749,7 +1728,7 @@ circpad_circ_responder_machine_init(void)
 
   /* We transition to the burst state on padding receive and on non-padding
    * recieve */
-  circ_responder_machine->transition_burst_events =
+  circ_responder_machine->start.transition_events[CIRCPAD_STATE_BURST] =
     CIRCPAD_TRANSITION_ON_PADDING_RECV |
     CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
 
@@ -2146,13 +2125,7 @@ circpad_machine_to_string(const circpad_machine_t *machine)
   smartlist_t *chunks = smartlist_new();
   char *out;
 
-  smartlist_add_asprintf(chunks,
-                         "0x%x ",
-                         machine->transition_burst_events);
-  smartlist_add_asprintf(chunks,
-                         "0x%x",
-                         machine->transition_gap_events);
-
+  circpad_state_serialize(&machine->start, chunks);
   circpad_state_serialize(&machine->gap, chunks);
   circpad_state_serialize(&machine->burst, chunks);
 

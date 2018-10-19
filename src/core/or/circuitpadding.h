@@ -369,12 +369,16 @@ typedef struct circpad_machine_t {
    * XXX: Does this make sense in terms of consensus weights? */
   uint8_t max_padding_percent;
 
-  /** Transition to the burst state (from start) on the events that are set
-   *  in this bitfield */
-  circpad_transition_t transition_burst_events;
-  /** Transition to the burst state (from start) on the events that are set
-   *  in this bitfield */
-  circpad_transition_t transition_gap_events;
+  /**
+   * The start state for this machine.
+   *
+   * In the original WTF-PAD, this is only used for transition to/from
+   * the burst state. All other fields are not used. But to simplify the
+   * code we've made it a first-class state. This has no performance
+   * consequences, but may make naive serialization of the state machine
+   * large, if we're not careful about how we represent empty fields.
+   */
+  circpad_state_t start;
 
   /**
    * The burst state for this machine.
