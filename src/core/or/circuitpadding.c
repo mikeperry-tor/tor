@@ -632,8 +632,10 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
       return;
     case CIRCPAD_TOKEN_REMOVAL_CLOSEST_USEC:
       circpad_machine_remove_closest_token(mi, target_bin_us, 1);
+      break;
     case CIRCPAD_TOKEN_REMOVAL_CLOSEST:
       circpad_machine_remove_closest_token(mi, target_bin_us, 0);
+      break;
     case CIRCPAD_TOKEN_REMOVAL_LOWER:
       circpad_machine_remove_lower_token(mi, target_bin_us);
       break;
