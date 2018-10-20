@@ -984,10 +984,9 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
   const circpad_state_t *state =
       circpad_machine_current_state(mi);
 
-  /* Check start state transitions */
+  /* If state is null we are in the end state. */
   if (!state) {
-    /* If state is null we are in the end state.
-     * If we in end state we don't pad no matter what. */
+    /* If we in end state we don't pad no matter what. */
     return CIRCPAD_WONTPAD_EVENT;
   }
 
