@@ -365,8 +365,8 @@ typedef struct circpad_machine_t {
 
   /** Padding percent cap: Stop padding if we exceed this percent overhead.
    * 0 means no limit. Overhead is defined as percent of total traffic, so
-   * that we can use 0..100 here.
-   * XXX: Does this make sense in terms of consensus weights? */
+   * that we can use 0..100 here. This is the same definition as used in
+   * Prop#265. */
   uint8_t max_padding_percent;
 
   /**
