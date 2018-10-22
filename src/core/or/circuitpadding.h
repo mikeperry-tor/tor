@@ -152,7 +152,8 @@ typedef struct circpad_distribution_t {
  * or the consensus, and are immutable.
  */
 typedef struct circpad_state_t {
-  /** how long the histogram is (in bins) */
+  /** how long the histogram is (in bins). Histograms must have at least 2
+   *  bins (or 0, if iat_dist is in use). */
   uint8_t histogram_len;
   /** histogram itself: an array of uint16s of tokens, whose
    * widths are exponentially spaced, in microseconds */

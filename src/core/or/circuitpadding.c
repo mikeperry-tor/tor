@@ -104,6 +104,9 @@ circpad_machine_current_state(circpad_machineinfo_t *machine)
 /**
  * Calculate the lower bound of a histogram bin. The upper bound
  * is obtained by calling this function with bin+1, and subtracting 1.
+ *
+ * The infinity bin is a the last bin in the array (histogram_len-1).
+ * It has a usec value of CIRCPAD_DELAY_INFINITE (UINT32_MAX).
  */
 STATIC uint32_t
 circpad_histogram_bin_to_usec(circpad_machineinfo_t *mi, int bin)
@@ -116,16 +119,26 @@ circpad_histogram_bin_to_usec(circpad_machineinfo_t *mi, int bin)
   else
     start_usec = state->start_usec;
 
+  if (bin >= state->histogram_len-1)
+    return CIRCPAD_DELAY_INFINITE;
+
   if (bin == 0)
     return start_usec;
 
   return start_usec
-      + (state->range_sec*USEC_PER_SEC)/(1<<(state->histogram_len-bin));
+      + (state->range_sec*USEC_PER_SEC)/(1<<(state->histogram_len-bin+1));
 }
 
 /**
- * Calculate the bin that contains the usec argument.
+ * Return the bin that contains the usec argument.
  * "Contains" is defined as us in [lower, upper).
+ *
+ * This function will never return the infinity bin (histogram_len-1),
+ * in order to simplify the rest of the code.
+ *
+ * This means that technically the last bin (histogram_len-2)
+ * has range [start_usec+range_sec*USEC_PER_SEC,
+ * CIRCPAD_DELAY_INFINITE].
  */
 STATIC int
 circpad_histogram_usec_to_bin(circpad_machineinfo_t *mi, uint32_t us)
@@ -143,15 +156,12 @@ circpad_histogram_usec_to_bin(circpad_machineinfo_t *mi, uint32_t us)
     return 0;
 
   bin = state->histogram_len -
-    tor_log2((state->range_sec*USEC_PER_SEC)/(us-start_usec+1))-1;
+    tor_log2((state->range_sec*USEC_PER_SEC)/(us-start_usec+1));
 
   /* Clamp the return value to account for timevals before the start
-   * of bin 0, or after the last bin. */
-  // XXX: Maybe this function should never return the infinity bin?
-  // I think all of its callers check for that and ignore it.
-  if (bin >= state->histogram_len || bin < 0) {
-    bin = MIN(MAX(bin, 0), state->histogram_len-1);
-  }
+   * of bin 0, or after the last bin. Don't return the infinity bin
+   * index. */
+  bin = MIN(MAX(bin, 0), state->histogram_len-2);
   return bin;
 }
 
@@ -227,8 +237,14 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
   uint32_t histogram_total = 0;
   uint32_t bin_choice;
   uint32_t bin_start, bin_end;
+  uint32_t start_usec;
 
   tor_assert(state);
+
+  if (state->use_rtt_estimate)
+    start_usec = mi->rtt_estimate_us+state->start_usec;
+  else
+    start_usec = state->start_usec;
 
   if (state->token_removal != CIRCPAD_TOKEN_REMOVAL_NONE) {
     /* We have a mutable histogram */
@@ -246,11 +262,6 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
     // XXX: Should we scale the distribution from secs to/from usecs,
     // or just use it raw? Is one better than the other?
     double val = circpad_distribution_sample(state->iat_dist);
-    uint32_t start_usec;
-    if (state->use_rtt_estimate)
-      start_usec = mi->rtt_estimate_us+state->start_usec;
-    else
-      start_usec = state->start_usec;
     val = MAX(0, val);
     val = MIN(val, state->range_sec*USEC_PER_SEC);
 
@@ -299,8 +310,12 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
   bin_start = circpad_histogram_bin_to_usec(mi, i);
   bin_end = circpad_histogram_bin_to_usec(mi, i+1);
 
+  /* Truncate the high bin in case it's the infinity bin:
+   * Don't actually schedule an "infinite"-1 delay */
+  bin_end = MIN(bin_end, start_usec+state->range_sec*USEC_PER_SEC*2);
+
   // Sample uniformly between histogram[i] to histogram[i+1]-1
-  return bin_start + crypto_rand_int(bin_end - bin_start);
+  return crypto_rand_uint64_range(bin_start, bin_end);
 }
 
 /**
@@ -378,9 +393,6 @@ circpad_machine_first_higher_index(circpad_machineinfo_t *mi,
 {
   int i = circpad_histogram_usec_to_bin(mi, target_bin_us);
 
-  if (i < 0)
-    return mi->histogram_len;
-
   /* Don't remove from the infinity bin */
   for (; i < mi->histogram_len-1; i++) {
     if (mi->histogram[i] &&
@@ -401,11 +413,6 @@ circpad_machine_first_lower_index(circpad_machineinfo_t *mi,
                                   uint64_t target_bin_us)
 {
   int i = circpad_histogram_usec_to_bin(mi, target_bin_us);
-
-  /* Don't remove from the infinity bin */
-  if (i >= mi->histogram_len-1) {
-    i = mi->histogram_len-2;
-  }
 
   for (; i >= 0; i--) {
     if (mi->histogram[i] &&
@@ -446,23 +453,13 @@ void
 circpad_machine_remove_lower_token(circpad_machineinfo_t *mi,
                                    uint64_t target_bin_us)
 {
-  /* First, check if we came before bin 0. In which case, decrement it. */
-  if (mi->histogram[0] &&
-      circpad_histogram_bin_to_usec(mi, 0) > target_bin_us) {
-    mi->histogram[0]--;
-    fprintf(stderr, "Token removal: %p %d\n", mi, mi->histogram[0]);
-  } else {
-    /* Otherwise, we need to remove the token from the first bin
-     * whose upper bound is lower than the target, and that
-     * has tokens remaining. */
-    int i = circpad_machine_first_lower_index(mi, target_bin_us);
+  int i = circpad_machine_first_lower_index(mi, target_bin_us);
 
-    if (i == -1) {
-      fprintf(stderr, "No more lower tokens: %p\n", mi);
-    } else {
-      tor_assert(mi->histogram[i]);
-      mi->histogram[i]--;
-    }
+  if (i == -1) {
+    fprintf(stderr, "No more lower tokens: %p\n", mi);
+  } else {
+    tor_assert(mi->histogram[i]);
+    mi->histogram[i]--;
   }
 }
 
@@ -477,75 +474,68 @@ circpad_machine_remove_closest_token(circpad_machineinfo_t *mi,
                                      uint64_t target_bin_us,
                                      int use_usec)
 {
-  /* First, check if we came before bin 0. In which case, decrement it. */
-  if (mi->histogram[0] &&
-      circpad_histogram_bin_to_usec(mi, 0) > target_bin_us) {
-    mi->histogram[0]--;
-    fprintf(stderr, "Token removal: %p %d\n", mi, mi->histogram[0]);
-  } else {
-    int lower = circpad_machine_first_lower_index(mi, target_bin_us);
-    int higher = circpad_machine_first_higher_index(mi, target_bin_us);
-    int current = circpad_histogram_usec_to_bin(mi, target_bin_us);
-    uint64_t lower_us;
-    uint64_t higher_us;
+  int lower = circpad_machine_first_lower_index(mi, target_bin_us);
+  int higher = circpad_machine_first_higher_index(mi, target_bin_us);
+  int current = circpad_histogram_usec_to_bin(mi, target_bin_us);
+  uint64_t lower_us;
+  uint64_t higher_us;
 
-    tor_assert(lower <= current);
-    tor_assert(higher >= current);
+  tor_assert(lower <= current);
+  tor_assert(higher >= current);
 
-    if (higher == mi->histogram_len && lower == -1) {
-      // Bins are empty
-      return;
-    } else if (higher == mi->histogram_len) {
-      // Higher bins are empty
+  if (higher == mi->histogram_len && lower == -1) {
+    // Bins are empty
+    return;
+  } else if (higher == mi->histogram_len) {
+    // Higher bins are empty
+    tor_assert(mi->histogram[lower]);
+    mi->histogram[lower]--;
+    return;
+  } else if (lower == -1) {
+    // Lower bins are empty
+    tor_assert(mi->histogram[higher]);
+    mi->histogram[higher]--;
+    return;
+  }
+
+  if (use_usec) {
+    lower_us = (circpad_histogram_bin_to_usec(mi, lower) +
+                circpad_histogram_bin_to_usec(mi, lower+1))/2;
+    higher_us = (circpad_histogram_bin_to_usec(mi, higher) +
+                circpad_histogram_bin_to_usec(mi, higher+1))/2;
+
+    if (target_bin_us < lower_us) {
+      // Lower bin is closer
       tor_assert(mi->histogram[lower]);
       mi->histogram[lower]--;
       return;
-    } else if (lower == -1) {
-      // Lower bins are empty
+    } else if (target_bin_us > higher_us) {
+      // Higher bin is closer
       tor_assert(mi->histogram[higher]);
       mi->histogram[higher]--;
       return;
-    }
-
-    if (use_usec) {
-      lower_us = (circpad_histogram_bin_to_usec(mi, lower) +
-                  circpad_histogram_bin_to_usec(mi, lower+1))/2;
-      higher_us = (circpad_histogram_bin_to_usec(mi, higher) +
-                  circpad_histogram_bin_to_usec(mi, higher+1))/2;
-
-      if (target_bin_us < lower_us) {
-        // Lower bin is closer
-        tor_assert(mi->histogram[lower]);
-        mi->histogram[lower]--;
-        return;
-      } else if (target_bin_us > higher_us) {
-        // Higher bin is closer
-        tor_assert(mi->histogram[higher]);
-        mi->histogram[higher]--;
-        return;
-      } else if (target_bin_us - lower_us > higher_us - target_bin_us) {
-        // Higher bin is closer
-        tor_assert(mi->histogram[higher]);
-        mi->histogram[higher]--;
-        return;
-      } else {
-        // Lower bin is closer
-        tor_assert(mi->histogram[lower]);
-        mi->histogram[lower]--;
-        return;
-      }
+    } else if (target_bin_us - lower_us > higher_us - target_bin_us) {
+      // Higher bin is closer
+      tor_assert(mi->histogram[higher]);
+      mi->histogram[higher]--;
+      return;
     } else {
-      if (current - lower > higher - current) {
-        // Higher bin is closer
-        tor_assert(mi->histogram[higher]);
-        mi->histogram[higher]--;
-        return;
-      } else {
-        // Lower bin is closer
-        tor_assert(mi->histogram[lower]);
-        mi->histogram[lower]--;
-        return;
-      }
+      // Lower bin is closer
+      tor_assert(mi->histogram[lower]);
+      mi->histogram[lower]--;
+      return;
+    }
+  } else {
+    if (current - lower > higher - current) {
+      // Higher bin is closer
+      tor_assert(mi->histogram[higher]);
+      mi->histogram[higher]--;
+      return;
+    } else {
+      // Lower bin is closer
+      tor_assert(mi->histogram[lower]);
+      mi->histogram[lower]--;
+      return;
     }
   }
 }
@@ -561,14 +551,7 @@ circpad_machine_remove_exact(circpad_machineinfo_t *mi,
 {
   int bin = circpad_histogram_usec_to_bin(mi, target_bin_us);
 
-  /* Don't remove from the infinity bin */
-  // XXX: Omg this can underflow here and elsehwere if histogram_len is 1
-  // (ie just infinity).
-  if (bin >= mi->histogram_len-1) {
-    bin = mi->histogram_len-2;
-  }
-
-  if (mi->histogram[bin])
+  if (mi->histogram[bin] > 0)
     mi->histogram[bin]--;
 }
 
@@ -1697,7 +1680,7 @@ circpad_circ_client_machine_init(void)
   circ_client_machine->burst.token_removal = CIRCPAD_TOKEN_REMOVAL_HIGHER;
 
   // FIXME: Tune this histogram
-  circ_client_machine->burst.histogram_len = 5;
+  circ_client_machine->burst.histogram_len = 2;
   circ_client_machine->burst.start_usec = 500;
   circ_client_machine->burst.range_sec = 1;
   /* We have 5 tokens in the histogram, which means that all circuits will look
@@ -1748,15 +1731,16 @@ circpad_circ_responder_machine_init(void)
   /* use_rtt_estimate tries to estimate how long padding cells take to go from
      C->M, and uses that as what as the base of the histogram */
   circ_responder_machine->burst.use_rtt_estimate = 1;
-  /* The histogram is 1 bin */
-  circ_responder_machine->burst.histogram_len = 1;
+  /* The histogram is 2 bins: an empty one, and infinity */
+  circ_responder_machine->burst.histogram_len = 2;
   circ_responder_machine->burst.start_usec = 5000;
   circ_responder_machine->burst.range_sec = 10;
   /* During burst state we wait forever for padding to arrive.
 
      We are waiting for a padding cell from the client to come in, so that we
      respond, and we immitate how extend looks like */
-  circ_responder_machine->burst.histogram[0] = 1; // Only infinity bin here
+  circ_responder_machine->burst.histogram[0] = 0;
+  circ_responder_machine->burst.histogram[1] = 1; // Only infinity bin here
   circ_responder_machine->burst.histogram_total = 1;
 
   /* From the gap state, we _stay_ in the gap state, when we receive padding
