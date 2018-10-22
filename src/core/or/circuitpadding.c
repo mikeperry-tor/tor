@@ -48,11 +48,11 @@ STATIC int circpad_histogram_usec_to_bin(circpad_machineinfo_t *mi,
 STATIC const circpad_state_t *circpad_machine_current_state(
                                       circpad_machineinfo_t *machine);
 void circpad_machine_remove_lower_token(circpad_machineinfo_t *mi,
-                                        uint64_t target_bin_us);
+                                        uint32_t target_bin_us);
 void circpad_machine_remove_higher_token(circpad_machineinfo_t *mi,
-                                        uint64_t target_bin_us);
+                                        uint32_t target_bin_us);
 void circpad_machine_remove_closest_token(circpad_machineinfo_t *mi,
-                                          uint64_t target_bin_us,
+                                          uint32_t target_bin_us,
                                           int use_usec);
 STATIC void circpad_machine_setup_tokens(circpad_machineinfo_t *mi);
 static inline circpad_purpose_mask_t circpad_circ_purpose_to_mask(uint8_t
@@ -294,7 +294,6 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
   }
 
   if (i == state->histogram_len-1) {
-    fprintf(stderr, "Infinity pad!\n");
     if (state->token_removal != CIRCPAD_TOKEN_REMOVAL_NONE &&
         mi->histogram[i] > 0) {
       mi->histogram[i]--;
@@ -383,13 +382,10 @@ circpad_distribution_sample(circpad_distribution_t dist)
 /**
  * Find the index of the first bin whose upper bound is
  * greater than the target, and that has tokens remaining.
- *
- * XXX: Why uint64_t here but uint32_t elsewhere? We should
- * stick to one. Do we really need 64 bits? Maybe..
  */
 static int
 circpad_machine_first_higher_index(circpad_machineinfo_t *mi,
-                                   uint64_t target_bin_us)
+                                   uint32_t target_bin_us)
 {
   int i = circpad_histogram_usec_to_bin(mi, target_bin_us);
 
@@ -410,7 +406,7 @@ circpad_machine_first_higher_index(circpad_machineinfo_t *mi,
  */
 static int
 circpad_machine_first_lower_index(circpad_machineinfo_t *mi,
-                                  uint64_t target_bin_us)
+                                  uint32_t target_bin_us)
 {
   int i = circpad_histogram_usec_to_bin(mi, target_bin_us);
 
@@ -430,16 +426,14 @@ circpad_machine_first_lower_index(circpad_machineinfo_t *mi,
  */
 void
 circpad_machine_remove_higher_token(circpad_machineinfo_t *mi,
-                                    uint64_t target_bin_us)
+                                    uint32_t target_bin_us)
 {
   /* We need to remove the token from the first bin
    * whose upper bound is greater than the target, and that
    * has tokens remaining. */
   int i = circpad_machine_first_higher_index(mi, target_bin_us);
 
-  if (i == mi->histogram_len) {
-    fprintf(stderr, "No more upper tokens: %p\n", mi);
-  } else {
+  if (i >= 0 && i < mi->histogram_len-1) {
     tor_assert(mi->histogram[i]);
     mi->histogram[i]--;
   }
@@ -451,13 +445,11 @@ circpad_machine_remove_higher_token(circpad_machineinfo_t *mi,
  */
 void
 circpad_machine_remove_lower_token(circpad_machineinfo_t *mi,
-                                   uint64_t target_bin_us)
+                                   uint32_t target_bin_us)
 {
   int i = circpad_machine_first_lower_index(mi, target_bin_us);
 
-  if (i == -1) {
-    fprintf(stderr, "No more lower tokens: %p\n", mi);
-  } else {
+  if (i >= 0 && i < mi->histogram_len-1) {
     tor_assert(mi->histogram[i]);
     mi->histogram[i]--;
   }
@@ -471,7 +463,7 @@ circpad_machine_remove_lower_token(circpad_machineinfo_t *mi,
  */
 void
 circpad_machine_remove_closest_token(circpad_machineinfo_t *mi,
-                                     uint64_t target_bin_us,
+                                     uint32_t target_bin_us,
                                      int use_usec)
 {
   int lower = circpad_machine_first_lower_index(mi, target_bin_us);
@@ -547,7 +539,7 @@ circpad_machine_remove_closest_token(circpad_machineinfo_t *mi,
  */
 static void
 circpad_machine_remove_exact(circpad_machineinfo_t *mi,
-                             uint64_t target_bin_us)
+                             uint32_t target_bin_us)
 {
   int bin = circpad_histogram_usec_to_bin(mi, target_bin_us);
 
@@ -585,6 +577,7 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
   /* If we have scheduled padding some time in the future, we want to see what
      bin we are in at the current time */
   target_bin_us = current_time - mi->padding_scheduled_at_us;
+  target_bin_us = MIN(target_bin_us, CIRCPAD_DELAY_INFINITE-1);
 
   /* We are treating this non-padding cell as a padding cell, so we cancel
      padding timer, if present. */
