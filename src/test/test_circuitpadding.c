@@ -205,7 +205,6 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
 
   if (circ == client_side) {
     if (cell->payload[0] == RELAY_COMMAND_PADDING_NEGOTIATE) {
-      fprintf(stderr, "Client sent padding negotiate\n");
       // Deliver to relay
       circpad_handle_padding_negotiate(relay_side, cell);
     } else {
@@ -215,7 +214,6 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
       tt_int_op(cell_direction, OP_EQ, CELL_DIRECTION_OUT);
       tt_int_op(is_target_hop, OP_EQ, 1);
 
-      fprintf(stderr, "Client padded\n");
       // Pretend a padding cell was sent
       circpad_event_padding_sent(client_side);
 
@@ -231,9 +229,7 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
       circpad_handle_padding_negotiated(client_side, cell,
                                         TO_ORIGIN_CIRCUIT(client_side)
                                            ->cpath->next);
-      fprintf(stderr, "Relay padding negotiated\n");
     } else {
-      fprintf(stderr, "Relay padded\n");
       // Pretend a padding cell was sent
       circpad_event_padding_sent(relay_side);
       // Receive padding cell at client
@@ -436,7 +432,7 @@ test_circuitpadding_tokens(void *arg)
   mi = client_side->padding_info[0];
 
   // Pretend a non-padding cell was sent
-  // XXX: This messes us up..
+  // XXX: This messes us up.. Padding gets scheduled..
   circpad_event_nonpadding_sent((circuit_t*)client_side);
   circpad_event_nonpadding_received((circuit_t*)client_side);
   tt_int_op(client_side->padding_info[0]->current_state, OP_EQ,
@@ -445,8 +441,8 @@ test_circuitpadding_tokens(void *arg)
   state = circpad_machine_current_state(client_side->padding_info[0]);
 
   // Test 1: converting usec->bin->usec->usec
-  for (uint32_t i = state->start_usec;
-           i < state->start_usec + state->range_sec*USEC_PER_SEC;
+  for (uint32_t i = 0;
+           i < state->start_usec + state->range_sec*USEC_PER_SEC*2;
            i++) {
     int bin = circpad_histogram_usec_to_bin(client_side->padding_info[0],
                                             i);
@@ -456,17 +452,6 @@ test_circuitpadding_tokens(void *arg)
                                              usec);
     tt_int_op(bin, OP_EQ, bin2);
   }
-
-  // XXX: Test edge transitions
-  fprintf(stderr, "Bin: %d\n",
-          circpad_histogram_usec_to_bin(mi,
-              circpad_histogram_bin_to_usec(mi, 1)-1));
-  fprintf(stderr, "Bin: %d\n",
-          circpad_histogram_usec_to_bin(mi,
-              circpad_histogram_bin_to_usec(mi, 1)));
-  fprintf(stderr, "Bin: %d\n",
-          circpad_histogram_usec_to_bin(mi,
-              circpad_histogram_bin_to_usec(mi, 1)+1));
 
   /* 2.a. Normal higher bin */
   {
@@ -819,7 +804,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(relay_side->padding_info[0]->current_state, OP_EQ,
               CIRCPAD_STATE_GAP);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
@@ -828,7 +812,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(n_client_cells, OP_EQ, 2);
   tt_int_op(n_relay_cells, OP_EQ, 2);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
@@ -837,7 +820,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(n_client_cells, OP_EQ, 3);
   tt_int_op(n_relay_cells, OP_EQ, 2);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
@@ -846,7 +828,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(n_client_cells, OP_EQ, 3);
   tt_int_op(n_relay_cells, OP_EQ, 3);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
@@ -855,7 +836,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(n_client_cells, OP_EQ, 4);
   tt_int_op(n_relay_cells, OP_EQ, 3);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
@@ -864,7 +844,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(n_client_cells, OP_EQ, 4);
   tt_int_op(n_relay_cells, OP_EQ, 4);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
@@ -873,7 +852,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(n_client_cells, OP_EQ, 5);
   tt_int_op(n_relay_cells, OP_EQ, 4);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
@@ -882,7 +860,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(n_client_cells, OP_EQ, 5);
   tt_int_op(n_relay_cells, OP_EQ, 5);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_NE, 0);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
@@ -891,7 +868,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
   tt_int_op(n_client_cells, OP_EQ, 6);
   tt_int_op(n_relay_cells, OP_EQ, 5);
 
-  fprintf(stderr, "Wait loop\n");
   tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
@@ -923,8 +899,6 @@ test_circuitpadding_circuitsetup_machine(void *arg)
             OP_EQ, CIRCPAD_STATE_END);
   tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
             OP_EQ, 0);
-
-  fprintf(stderr, "Client %d, relay: %d\n", n_client_cells, n_relay_cells);
 
   // FIXME: Test refill
   // FIXME: Test timer cancellation
