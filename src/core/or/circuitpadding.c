@@ -105,6 +105,10 @@ circpad_machine_current_state(circpad_machineinfo_t *machine)
  * Calculate the lower bound of a histogram bin. The upper bound
  * is obtained by calling this function with bin+1, and subtracting 1.
  *
+ * Bins are exponentially spaced, so that each subsequent bin is twice
+ * as large as the previous. This is done so that higher time resolution
+ * is given to lower time values.
+ *
  * The infinity bin is a the last bin in the array (histogram_len-1).
  * It has a usec value of CIRCPAD_DELAY_INFINITE (UINT32_MAX).
  */
@@ -259,8 +263,6 @@ circpad_machine_sample_delay(circpad_machineinfo_t *mi)
     histogram_total = state->histogram_total;
   } else {
     /* Sample from a fixed IAT distribution and return */
-    // XXX: Should we scale the distribution from secs to/from usecs,
-    // or just use it raw? Is one better than the other?
     double val = circpad_distribution_sample(state->iat_dist);
     val = MAX(0, val);
     val = MIN(val, state->range_sec*USEC_PER_SEC);
@@ -870,8 +872,17 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
 
   /* Check our padding limits */
   if (circpad_machine_reached_padding_limit(mi)) {
-    // XXX: Log circ id? for origin circuits we have one. Don't for middles.
-    log_fn(LOG_INFO, LD_CIRC, "Padding machine has reached padding limit.");
+   if (CIRCUIT_IS_ORIGIN(mi->on_circ)) {
+      log_fn(LOG_INFO, LD_CIRC,
+           "Padding machine has reached padding limit on circuit %u",
+             TO_ORIGIN_CIRCUIT(mi->on_circ)->global_identifier);
+    } else {
+      log_fn(LOG_INFO, LD_CIRC,
+           "Padding machine has reached padding limit on circuit %"PRIu64
+           ", %d",
+           mi->on_circ->n_chan ? mi->on_circ->n_chan->global_identifier : 0,
+           mi->on_circ->n_circ_id);
+    }
     return CIRCPAD_WONTPAD_INFINITY;
   }
 
@@ -1279,15 +1290,13 @@ circpad_purpose_mask_t
 circpad_circ_purpose_to_mask(uint8_t circ_purpose)
 {
   /* Treat OR circ purposes as ignored. They should not be passed here*/
-  if (circ_purpose <= CIRCUIT_PURPOSE_OR_MAX_) {
-    // XXX: BUG
+  if (BUG(circ_purpose <= CIRCUIT_PURPOSE_OR_MAX_)) {
     return 0;
   }
 
   /* Treat new client circuit purposes as "OMG ITS EVERYTHING".
    * This also should not happen */
-  if (circ_purpose - CIRCUIT_PURPOSE_OR_MAX_ - 1 > 32) {
-    // XXX: Bug
+  if (BUG(circ_purpose - CIRCUIT_PURPOSE_OR_MAX_ - 1 > 32)) {
     return 255;
   }
 
@@ -1331,7 +1340,6 @@ circpad_add_matching_machines(origin_circuit_t *on_circ)
 
 #ifdef TOR_UNIT_TESTS
   /* Tests don't have to init our padding machines */
-  // XXX: Should we make them, so they exercise us?
   if (!origin_padding_machines)
     return;
 #endif
@@ -1481,9 +1489,9 @@ void
 circpad_deliver_unrecognized_cell_events(circuit_t *circ,
                                          cell_direction_t dir)
 {
+  // We should never see unrecognized cells at origin.
+  // Our caller emits a warn when this happens.
   if (!CIRCUIT_IS_ORIGIN(circ)) {
-    // XXX: Log? Bug? We should never see unrecognized
-    // cells at origin.
     return;
   }
 
@@ -1628,11 +1636,9 @@ circpad_setup_machine_on_circ(circuit_t *on_circ, circpad_machine_t *machine)
     return;
   }
 
-  // XXX: BUG()?
-  //tor_fragile_assert(on_circ->padding_machine[machine->machine_index]
-  //   == NULL);
-  //tor_fragile_assert(on_circ->padding_info[machine->machine_index]
-  //   == NULL);
+  tor_assert_nonfatal(on_circ->padding_machine[machine->machine_index]
+                      == NULL);
+  tor_assert_nonfatal(on_circ->padding_info[machine->machine_index] == NULL);
 
   on_circ->padding_info[machine->machine_index] =
       circpad_circuit_machineinfo_new(on_circ, machine->machine_index);
@@ -1645,7 +1651,8 @@ circpad_circ_client_machine_init(void)
   circpad_machine_t *circ_client_machine
       = tor_malloc_zero(sizeof(circpad_machine_t));
 
-  // XXX: Better conditions..
+  // XXX: Better conditions for merge.. Or disable this machine in
+  // merge?
   circ_client_machine->conditions.min_hops = 2;
   circ_client_machine->conditions.state_mask = CIRCPAD_STATE_ALL;
   circ_client_machine->conditions.purpose_mask = CIRCPAD_PURPOSE_ALL;
@@ -1669,8 +1676,7 @@ circpad_circ_client_machine_init(void)
   circ_client_machine->burst.transition_events[CIRCPAD_STATE_END] =
     CIRCPAD_TRANSITION_ON_BINS_EMPTY;
 
-  // FIXME: Is this what we want?
-  circ_client_machine->burst.token_removal = CIRCPAD_TOKEN_REMOVAL_HIGHER;
+  circ_client_machine->burst.token_removal = CIRCPAD_TOKEN_REMOVAL_CLOSEST;
 
   // FIXME: Tune this histogram
   circ_client_machine->burst.histogram_len = 2;
@@ -1697,8 +1703,6 @@ circpad_circ_responder_machine_init(void)
    * let's match the client */
   circ_responder_machine->target_hopnum = 2;
   circ_responder_machine->origin_side = 0;
-
-  /* XXX check if we need to setup token_removal */
 
   /* This is the settings of the state machine. In the future we are gonna
      serialize this into the consensus or the torrc */
@@ -1777,9 +1781,9 @@ circpad_circ_responder_machine_init(void)
 void
 circpad_machines_init(void)
 {
-  // XXX: BUG()?
-  //tor_fragile_assert(origin_padding_machines == NULL);
-  //tor_fragile_assert(relay_padding_machines == NULL);
+  tor_assert_nonfatal(origin_padding_machines == NULL);
+  tor_assert_nonfatal(relay_padding_machines == NULL);
+
   origin_padding_machines = smartlist_new();
   relay_padding_machines = smartlist_new();
 

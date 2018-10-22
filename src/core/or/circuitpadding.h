@@ -174,8 +174,11 @@ typedef struct circpad_state_t {
 
   /**
    * The iat_dist is a parametrized way of encoding inter-packet delay
-   * information. It can be used instead of histograms. If it is used,
-   * token_removal below must be set to CIRCPAD_TOKEN_REMOVAL_NONE.
+   * information in microseconds. It can be used instead of histograms.
+   *
+   * If it is used, token_removal below must be set to
+   * CIRCPAD_TOKEN_REMOVAL_NONE.
+   *
    * Start_usec, range_sec, and rtt_estimates are still applied to the
    * results of sampling from this distribution (range_sec is used as a max).
    */
@@ -183,8 +186,8 @@ typedef struct circpad_state_t {
 
   /**
    * The length dist is a parameterized way of encoding how long this
-   * state machine runs in terms of sent padding packets or all
-   * sent packets. Values are sampled from this distribution, clamped
+   * state machine runs in terms of sent padding cells or all
+   * sent cells. Values are sampled from this distribution, clamped
    * to max_len, and then start_len is added to that value.
    *
    * It may be specified instead of or in addition to
