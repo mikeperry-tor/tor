@@ -52,13 +52,20 @@ typedef enum {
   CIRCPAD_TRANSITION_ON_LENGTH_COUNT = 1<<6
 } circpad_transition_t;
 
-/** These constants are just for type clarification. */
-
 /** Boolean type that says if we decided to transition states or not */
 typedef enum {
   CIRCPAD_STATE_UNCHANGED = 0,
   CIRCPAD_STATE_CHANGED = 1
 } circpad_decision_t;
+
+/** The type for timer delays, in microseconds */
+typedef uint32_t circpad_delay_t;
+
+/** The type for absolute time, from monotime_absolute_usec() */
+typedef uint64_t circpad_time_t;
+
+/** The type for histogram bins */
+typedef uint16_t circpad_hist_bin_t;
 
 /**
  * An infinite padding cell delay means don't schedule any padding --
@@ -96,6 +103,9 @@ typedef uint32_t circpad_purpose_mask_t;
 typedef struct circpad_machine_conditions_t {
   /**Only apply padding *if* the circuit has this many hops */
   uint8_t min_hops : 3;
+
+  /** Only apply this machine if vanguards are enabled */
+  uint8_t requires_vanguards : 1;
 
   /** Only apply padding *if* the circuit's state matches any of
    *  the bits set in this bitmask. */
@@ -170,12 +180,12 @@ typedef struct circpad_state_t {
   uint8_t histogram_len;
   /** histogram itself: an array of uint16s of tokens, whose
    * widths are exponentially spaced, in microseconds */
-  uint16_t histogram[CIRCPAD_MAX_HISTOGRAM_LEN];
+  circpad_hist_bin_t histogram[CIRCPAD_MAX_HISTOGRAM_LEN];
   /** total number of tokens */
   uint32_t histogram_total;
 
   /** Microseconds of the first bin of histogram, or base of iat dist */
-  uint32_t start_usec;
+  circpad_delay_t start_usec;
   /** The span of the histogram in seconds, used to calculate bin with.
    *  For iat dist use, this is used as a max delay cap on the distribution. */
   uint16_t range_sec;
@@ -269,7 +279,7 @@ typedef struct circpad_machineinfo_t {
 
   /** A mutable copy of the histogram for the current state.
    *  NULL if remove_tokens is false for that state */
-  uint16_t *histogram;
+  circpad_hist_bin_t *histogram;
   /** Length of the above histogram.
    * XXX: This field *could* be removed at the expense of added
    * complexity+overhead for reaching back into the immutable machine
@@ -295,14 +305,14 @@ typedef struct circpad_machineinfo_t {
   /**
    * EWMA estimate of the RTT of the circuit from this hop
    * to the exit end, in microseconds. */
-  uint32_t rtt_estimate_us;
+  circpad_delay_t rtt_estimate_us;
 
   /**
    * The last time we got an event relevant to estimating
    * the RTT. Monotonic time in microseconds since system
    * start.
    */
-  uint64_t last_received_time_us;
+  circpad_time_t last_received_time_us;
 
   /**
    * The time at which we scheduled a non-padding packet,
@@ -311,7 +321,7 @@ typedef struct circpad_machineinfo_t {
    * Monotonic time in microseconds since system start.
    * This is 0 if we haven't chosen a padding delay.
    */
-  uint64_t padding_scheduled_at_us;
+  circpad_time_t padding_scheduled_at_us;
 
   /** What state is this machine in? */
   ENUM_BF(circpad_statenum_t) current_state : 2;
@@ -458,8 +468,9 @@ void circpad_cell_event_padding_received(circuit_t *on_circ);
 
 /** Internal events are events the machines send to themselves */
 circpad_decision_t circpad_internal_event_infinity(circpad_machineinfo_t *mi);
-circpad_decision_t circpad_internal_event_bins_empty(circpad_machineinfo_t *mi);
-circpad_decision_t circpad_internal_event_state_length_up(circpad_machineinfo_t *mi);
+circpad_decision_t circpad_internal_event_bins_empty(circpad_machineinfo_t *);
+circpad_decision_t circpad_internal_event_state_length_up(
+                                  circpad_machineinfo_t *);
 
 /** Machine creation events */
 void circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ);
