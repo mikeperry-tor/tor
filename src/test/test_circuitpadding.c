@@ -215,10 +215,10 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
       tt_int_op(is_target_hop, OP_EQ, 1);
 
       // Pretend a padding cell was sent
-      circpad_event_padding_sent(client_side);
+      circpad_cell_event_padding_sent(client_side);
 
       // Receive padding cell at middle
-      circpad_event_padding_received(relay_side);
+      circpad_cell_event_padding_received(relay_side);
     }
     n_client_cells++;
   } else if (circ == relay_side) {
@@ -231,9 +231,9 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
                                            ->cpath->next);
     } else {
       // Pretend a padding cell was sent
-      circpad_event_padding_sent(relay_side);
+      circpad_cell_event_padding_sent(relay_side);
       // Receive padding cell at client
-      circpad_event_padding_received(client_side);
+      circpad_cell_event_padding_received(client_side);
     }
 
     n_relay_cells++;
@@ -285,11 +285,11 @@ test_circuitpadding_rtt(void *arg)
   circpad_circ_token_machine_setup(relay_side);
 
   /* Test 1: Test measuring RTT */
-  circpad_event_nonpadding_received((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)relay_side);
   tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_NE, 0);
 
   tor_sleep_msec(20);
-  circpad_event_nonpadding_sent((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_sent((circuit_t*)relay_side);
   tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
   tt_int_op(relay_side->padding_info[0]->rtt_estimate_us, OP_GE, 19000);
@@ -300,12 +300,12 @@ test_circuitpadding_rtt(void *arg)
             circpad_machine_current_state(
              relay_side->padding_info[0])->start_usec);
 
-  circpad_event_nonpadding_received((circuit_t*)relay_side);
-  circpad_event_nonpadding_received((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)relay_side);
   tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_NE, 0);
   tor_sleep_msec(40);
-  circpad_event_nonpadding_sent((circuit_t*)relay_side);
-  circpad_event_nonpadding_sent((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_sent((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_sent((circuit_t*)relay_side);
   tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
   tt_int_op(relay_side->padding_info[0]->rtt_estimate_us, OP_GE, 29000);
@@ -320,9 +320,9 @@ test_circuitpadding_rtt(void *arg)
   tt_int_op(relay_side->padding_info[0]->stop_rtt_update, OP_EQ, 1);
   rtt_estimate = relay_side->padding_info[0]->rtt_estimate_us;
 
-  circpad_event_nonpadding_received((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)relay_side);
   tor_sleep_msec(4);
-  circpad_event_nonpadding_sent((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_sent((circuit_t*)relay_side);
 
   tt_int_op(relay_side->padding_info[0]->rtt_estimate_us, OP_EQ, rtt_estimate);
   tt_int_op(relay_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
@@ -334,11 +334,11 @@ test_circuitpadding_rtt(void *arg)
              relay_side->padding_info[0])->start_usec);
 
   /* Test 3: Make sure client side machine properly ignores RTT */
-  circpad_event_nonpadding_received((circuit_t*)client_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)client_side);
   tt_int_op(client_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
   tor_sleep_msec(20);
-  circpad_event_nonpadding_sent((circuit_t*)client_side);
+  circpad_cell_event_nonpadding_sent((circuit_t*)client_side);
   tt_int_op(client_side->padding_info[0]->last_received_time_us, OP_EQ, 0);
 
   tt_int_op(client_side->padding_info[0]->rtt_estimate_us, OP_EQ, 0);
@@ -433,8 +433,8 @@ test_circuitpadding_tokens(void *arg)
 
   // Pretend a non-padding cell was sent
   // XXX: This messes us up.. Padding gets scheduled..
-  circpad_event_nonpadding_sent((circuit_t*)client_side);
-  circpad_event_nonpadding_received((circuit_t*)client_side);
+  circpad_cell_event_nonpadding_sent((circuit_t*)client_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)client_side);
   tt_int_op(client_side->padding_info[0]->current_state, OP_EQ,
             CIRCPAD_STATE_BURST);
 
@@ -499,12 +499,12 @@ test_circuitpadding_tokens(void *arg)
 
   /* Drain the infinity bin and cause a refill */
   tt_int_op(mi->histogram[4], OP_EQ, 2);
-  circpad_event_nonpadding_received((circuit_t*)client_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)client_side);
   tt_int_op(mi->histogram[4], OP_EQ, 1);
-  circpad_event_nonpadding_received((circuit_t*)client_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)client_side);
   tt_int_op(mi->histogram[4], OP_EQ, 0);
 
-  circpad_event_nonpadding_sent((circuit_t*)client_side);
+  circpad_cell_event_nonpadding_sent((circuit_t*)client_side);
 
   // We should have refilled here.
   tt_int_op(mi->histogram[4], OP_EQ, 2);
@@ -708,19 +708,19 @@ simulate_single_hop_extend(circuit_t *client, circuit_t *mid_relay,
   tor_addr_t addr;
 
   // Pretend a non-padding cell was sent
-  circpad_event_nonpadding_sent((circuit_t*)client);
+  circpad_cell_event_nonpadding_sent((circuit_t*)client);
 
   // Receive extend cell at middle
-  circpad_event_nonpadding_received((circuit_t*)mid_relay);
+  circpad_cell_event_nonpadding_received((circuit_t*)mid_relay);
 
   // Sleep a tiny bit so we can calculate an RTT
   tor_sleep_msec(10);
 
   // Receive extended cell at middle
-  circpad_event_nonpadding_sent((circuit_t*)mid_relay);
+  circpad_cell_event_nonpadding_sent((circuit_t*)mid_relay);
 
   // Receive extended cell at first hop
-  circpad_event_nonpadding_received((circuit_t*)client);
+  circpad_cell_event_nonpadding_received((circuit_t*)client);
 
   // Add a hop to cpath
   crypt_path_t *hop = tor_malloc_zero(sizeof(crypt_path_t));
@@ -886,19 +886,16 @@ test_circuitpadding_circuitsetup_machine(void *arg)
             OP_EQ, 0);
 
   /* Simulate application traffic */
-  circpad_event_nonpadding_sent((circuit_t*)client_side);
-  circpad_event_nonpadding_received((circuit_t*)relay_side);
-  circpad_event_nonpadding_sent((circuit_t*)relay_side);
-  circpad_event_nonpadding_received((circuit_t*)client_side);
+  circpad_cell_event_nonpadding_sent((circuit_t*)client_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_sent((circuit_t*)relay_side);
+  circpad_cell_event_nonpadding_received((circuit_t*)client_side);
 
-  tt_int_op(client_side->padding_info[0]->current_state,
-            OP_EQ, CIRCPAD_STATE_END);
-  tt_int_op(client_side->padding_info[0]->padding_scheduled_at_us,
-            OP_EQ, 0);
-  tt_int_op(relay_side->padding_info[0]->current_state,
-            OP_EQ, CIRCPAD_STATE_END);
-  tt_int_op(relay_side->padding_info[0]->padding_scheduled_at_us,
-            OP_EQ, 0);
+  tt_ptr_op(client_side->padding_info[0], OP_EQ, NULL);
+  tt_ptr_op(client_side->padding_machine[0], OP_EQ, NULL);
+
+  tt_ptr_op(relay_side->padding_info[0], OP_EQ, NULL);
+  tt_ptr_op(relay_side->padding_machine[0], OP_EQ, NULL);
 
   // FIXME: Test refill
   // FIXME: Test timer cancellation
