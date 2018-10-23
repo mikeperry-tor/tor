@@ -1093,7 +1093,8 @@ circpad_estimate_circ_rtt_on_received(circuit_t *circ,
    */
   if (mi->last_received_time_us) {
     /* We also allow multiple back-to-back packets if the circuit is not
-     * opened, to handle var cells */
+     * opened, to handle var cells.
+     * XXX: Will this work with out var cell plans? */
     if (circ->state == CIRCUIT_STATE_OPEN) {
       log_fn(LOG_INFO, LD_CIRC,
            "Stopping padding RTT estimation on circuit (%"PRIu64
@@ -1114,6 +1115,7 @@ circpad_estimate_circ_rtt_on_received(circuit_t *circ,
  * of the circuit by subtracting the last received cell timestamp
  * from the current time. It allows back-to-back cells until
  * the circuit is opened, to allow for var cell handshakes.
+ * XXX: Check our var cell plans to make sure this will work.
  */
 static void
 circpad_estimate_circ_rtt_on_send(circuit_t *circ,
