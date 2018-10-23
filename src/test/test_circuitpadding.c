@@ -367,14 +367,14 @@ circpad_circ_token_machine_setup(circuit_t *on_circ)
   on_circ->padding_info[0] = circpad_circuit_machineinfo_new(on_circ, 0);
 
    circ_client_machine.start.transition_events[CIRCPAD_STATE_BURST] =
-    CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
+    CIRCPAD_EVENT_NONPADDING_RECV;
 
   circ_client_machine.burst.transition_events[CIRCPAD_STATE_BURST] =
-    CIRCPAD_TRANSITION_ON_PADDING_RECV |
-    CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
+    CIRCPAD_EVENT_PADDING_RECV |
+    CIRCPAD_EVENT_NONPADDING_RECV;
 
   circ_client_machine.burst.transition_cancel_events =
-    CIRCPAD_TRANSITION_ON_NONPADDING_SENT;
+    CIRCPAD_EVENT_NONPADDING_SENT;
 
   // FIXME: Is this what we want?
   circ_client_machine.burst.token_removal = CIRCPAD_TOKEN_REMOVAL_HIGHER;
