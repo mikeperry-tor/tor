@@ -59,6 +59,7 @@
 #include "core/or/circuitbuild.h"
 #include "core/or/circuitlist.h"
 #include "core/or/circuituse.h"
+#include "core/or/circuitpadding.h"
 #include "core/or/circuitmux_ewma.h"
 #include "core/or/command.h"
 #include "lib/compress/compress.h"
@@ -3548,9 +3549,13 @@ tor_init(int argc, char *argv[])
   /* The options are now initialised */
   const or_options_t *options = get_options();
 
-  /* Initialize channelpadding parameters to defaults until we get
-   * a consensus */
+  /* Initialize channelpadding and circpad parameters to defaults
+   * until we get a consensus */
   channelpadding_new_consensus_params(NULL);
+  circpad_new_consensus_params(NULL);
+
+  /* Initialize circuit padding to defaults+torrc until we get a consensus */
+  circpad_machines_init();
 
   /* Initialize predicted ports list after loading options */
   predicted_ports_init();
@@ -3666,6 +3671,7 @@ tor_free_all(int postfork)
   dns_free_all();
   clear_pending_onions();
   circuit_free_all();
+  circpad_machines_free();
   entry_guards_free_all();
   pt_free_all();
   channel_tls_free_all();
