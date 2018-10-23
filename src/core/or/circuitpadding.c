@@ -33,10 +33,10 @@ HANDLE_IMPL(circpad_machineinfo, circpad_machineinfo_t,);
 
 #define USEC_PER_SEC (1000000)
 
-int circpad_machine_remove_token(circpad_machineinfo_t *mi);
 void circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi);
-int circpad_machine_schedule_padding(circpad_machineinfo_t *mi);
-int circpad_machine_transition(circpad_machineinfo_t *mi,
+circpad_decision_t circpad_machine_remove_token(circpad_machineinfo_t *mi);
+circpad_decision_t circpad_machine_schedule_padding(circpad_machineinfo_t *);
+circpad_decision_t circpad_machine_transition(circpad_machineinfo_t *mi,
                                               circpad_transition_t event);
 circpad_machineinfo_t *circpad_circuit_machineinfo_new(circuit_t *on_circ,
                                                int machine_index);
@@ -555,7 +555,7 @@ circpad_machine_remove_exact(circpad_machineinfo_t *mi,
  * Returns 1 if either limits are hit and we decide to change states,
  * otherwise returns 0.
  */
-static int
+static circpad_decision_t
 circpad_check_token_supply(circpad_machineinfo_t *mi)
 {
   uint32_t histogram_total = 0;
@@ -571,9 +571,10 @@ circpad_check_token_supply(circpad_machineinfo_t *mi)
     for (int b = 0; b < mi->histogram_len-1; b++)
       histogram_total += mi->histogram[b];
 
+    /* If we change state, we're done */
     if (histogram_total == 0) {
-      if (circpad_internal_event_bins_empty(mi))
-        return 1;
+      if (circpad_internal_event_bins_empty(mi) == CIRCPAD_STATE_CHANGED)
+        return CIRCPAD_STATE_CHANGED;
     }
   }
 
@@ -581,7 +582,7 @@ circpad_check_token_supply(circpad_machineinfo_t *mi)
     return circpad_internal_event_state_length_up(mi);
   }
 
-  return 0;
+  return CIRCPAD_STATE_UNCHANGED;
 }
 
 /**
@@ -591,7 +592,7 @@ circpad_check_token_supply(circpad_machineinfo_t *mi)
  *
  * Returns 1 if we transition states, 0 otherwise.
  */
-int
+circpad_decision_t
 circpad_machine_remove_token(circpad_machineinfo_t *mi)
 {
   const circpad_state_t *state = NULL;
@@ -607,7 +608,7 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
 
   /* Dont remove any tokens if there was no padding scheduled */
   if (!mi->padding_scheduled_at_us) {
-    return 0;
+    return CIRCPAD_STATE_UNCHANGED;
   }
 
   state = circpad_machine_current_state(mi);
@@ -628,7 +629,7 @@ circpad_machine_remove_token(circpad_machineinfo_t *mi)
 
   /* If we are not in a padding state (like start or end), we're done */
   if (!state)
-    return 0;
+    return CIRCPAD_STATE_UNCHANGED;
 
   /* If we're enforcing a state length on non-padding packets,
    * decrement it */
@@ -826,7 +827,7 @@ circpad_new_consensus_params(networkstatus_t *ns)
  *
  * Returns 1 if limits are set and we've hit them. Otherwise returns 0.
  */
-static int
+static bool
 circpad_machine_reached_padding_limit(circpad_machineinfo_t *mi)
 {
   const circpad_machine_t *machine = CIRCPAD_GET_MACHINE(mi);
@@ -873,7 +874,7 @@ circpad_machine_reached_padding_limit(circpad_machineinfo_t *mi)
  * Returns 1 if we decide to transition states (due to infinity bin),
  * 0 otherwise.
  */
-int
+circpad_decision_t
 circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
 {
   uint32_t in_us = 0;
@@ -893,7 +894,7 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
            mi->on_circ->n_chan ? mi->on_circ->n_chan->global_identifier : 0,
            mi->on_circ->n_circ_id);
     }
-    return 0;
+    return CIRCPAD_STATE_UNCHANGED;
   }
 
   log_fn(LOG_INFO, LD_CIRC, "Scheduling padding?");
@@ -907,7 +908,7 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
   // scheduled padding either).
   if (mi->current_state == CIRCPAD_STATE_END) {
     log_fn(LOG_INFO, LD_CIRC, "Padding end state");
-    return 0;
+    return CIRCPAD_STATE_UNCHANGED;
   }
 
   /* in_us = in microseconds */
@@ -928,13 +929,13 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
      * infinity event later? That would be a strange machine,
      * but there's no reason to make it impossible. */
     mi->padding_scheduled_at_us = monotime_absolute_usec();
-    return 0;
+    return CIRCPAD_STATE_UNCHANGED;
   }
 
   if (in_us <= 0) {
     mi->padding_scheduled_at_us = monotime_absolute_usec();
     circpad_send_padding_cell_for_callback(mi);
-    return 0;
+    return CIRCPAD_STATE_UNCHANGED;
   }
 
   timeout.tv_sec = in_us/USEC_PER_SEC;
@@ -964,7 +965,7 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
   // TODO-MP-AP: Unify with channelpadding counter
   //rep_hist_padding_count_timers(++total_timers_pending);
 
-  return 0;
+  return CIRCPAD_STATE_UNCHANGED;
 }
 
 /**
@@ -975,7 +976,7 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
  *
  * Returns 1 if we transition states, 0 otherwise.
  */
-int
+circpad_decision_t
 circpad_machine_transition(circpad_machineinfo_t *mi,
                            circpad_transition_t event)
 {
@@ -985,7 +986,7 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
   /* If state is null we are in the end state. */
   if (!state) {
     /* If we in end state we don't pad no matter what. */
-    return 0;
+    return CIRCPAD_STATE_UNCHANGED;
   }
 
   /* Check cancel events and cancel any pending padding */
@@ -995,9 +996,9 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
       mi->padding_timer_scheduled = 0;
       /* Cancel current timer (if any) */
       timer_disable(mi->padding_timer);
-      return 0;
+      return CIRCPAD_STATE_UNCHANGED;
     }
-    return 0;
+    return CIRCPAD_STATE_UNCHANGED;
   }
 
   /* See if we need to transition to any other states based on this event.
@@ -1044,12 +1045,12 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
             }
           }
           /* We transitioned but we don't pad in end */
-          return 1;
+          return CIRCPAD_STATE_CHANGED;
         }
 
         /* We transitioned to a new state, schedule padding */
         circpad_machine_schedule_padding(mi);
-        return 1;
+        return CIRCPAD_STATE_CHANGED;
       }
 
       /* We transitioned back to the same state. Schedule padding,
@@ -1058,7 +1059,7 @@ circpad_machine_transition(circpad_machineinfo_t *mi,
     }
   }
 
-  return 0;
+  return CIRCPAD_STATE_UNCHANGED;
 }
 
 /**
@@ -1263,7 +1264,7 @@ circpad_cell_event_padding_received(circuit_t *on_circ)
  *
  * Return 1 if we decide to transition, 0 otherwise.
  */
-int
+circpad_decision_t
 circpad_internal_event_infinity(circpad_machineinfo_t *mi)
 {
   return circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_INFINITY);
@@ -1277,15 +1278,16 @@ circpad_internal_event_infinity(circpad_machineinfo_t *mi)
  *
  * Return 1 if we decide to transition, 0 otherwise.
  */
-int
+circpad_decision_t
 circpad_internal_event_bins_empty(circpad_machineinfo_t *mi)
 {
-  if (circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_BINS_EMPTY)) {
-    return 1;
+  if (circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_BINS_EMPTY)
+      == CIRCPAD_STATE_CHANGED) {
+    return CIRCPAD_STATE_CHANGED;
   } else {
     /* If we dont transition, then we refill the tokens */
     circpad_machine_setup_tokens(mi);
-    return 0;
+    return CIRCPAD_STATE_UNCHANGED;
   }
 }
 
@@ -1295,7 +1297,7 @@ circpad_internal_event_bins_empty(circpad_machineinfo_t *mi)
  *
  * Return 1 if we decide to transition, 0 otherwise.
  */
-int
+circpad_decision_t
 circpad_internal_event_state_length_up(circpad_machineinfo_t *mi)
 {
   return circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_LENGTH_COUNT);
@@ -1304,7 +1306,7 @@ circpad_internal_event_state_length_up(circpad_machineinfo_t *mi)
 /**
  * Returns true if the circuit matches the conditions.
  */
-static inline int
+static inline bool
 circpad_machine_conditions_met(origin_circuit_t *circ,
                                const circpad_machine_t *machine)
 {
@@ -1513,7 +1515,7 @@ circpad_machine_event_circ_has_no_streams(origin_circuit_t *circ)
  * Returns false if we're not an origin circuit, or if from_hop
  * does not match one of the padding machines.
  */
-int
+bool
 circpad_padding_is_from_expected_hop(circuit_t *circ,
                                      crypt_path_t *from_hop)
 {
@@ -1881,7 +1883,7 @@ circpad_machines_free(void)
 /**
  * Check the Protover info to see if a node supports padding.
  */
-static int
+static bool
 circpad_node_supports_padding(const node_t *node)
 {
   if (node->rs) {
@@ -1920,7 +1922,7 @@ circuit_get_nth_hop(origin_circuit_t *circ, int hop)
  * Return true if a particular circuit supports padding
  * at the desired hop.
  */
-static int
+static bool
 circpad_circuit_supports_padding(origin_circuit_t *circ,
                                  int target_hopnum)
 {
@@ -1938,7 +1940,7 @@ circpad_circuit_supports_padding(origin_circuit_t *circ,
  *
  * Returns 1 if successful (or already set up), 0 otherwise.
  */
-int
+bool
 circpad_negotiate_padding(origin_circuit_t *circ,
                           circpad_machine_num_t machine,
                           int target_hopnum,
@@ -1977,7 +1979,7 @@ circpad_negotiate_padding(origin_circuit_t *circ,
  *
  * Returns 1 if successful (or already set up), 0 otherwise.
  */
-int
+bool
 circpad_padding_negotiated(circuit_t *circ,
                            circpad_machine_num_t machine,
                            int command,
@@ -2017,6 +2019,8 @@ circpad_padding_negotiated(circuit_t *circ,
  * This is called at the middle node upon receipt of the client's choice of
  * state machine, so that it can use the requested state machine index, if
  * it is available.
+ *
+ * Returns -1 on error, 0 on success.
  */
 int
 circpad_handle_padding_negotiate(circuit_t *circ, cell_t *cell)
@@ -2088,6 +2092,8 @@ circpad_handle_padding_negotiate(circuit_t *circ, cell_t *cell)
  *
  * This is called at the origin upon receipt of the middle's response
  * to our choice of state machine.
+ *
+ * Returns -1 on error, 0 on success.
  */
 int
 circpad_handle_padding_negotiated(circuit_t *circ, cell_t *cell,

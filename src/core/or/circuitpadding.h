@@ -52,6 +52,14 @@ typedef enum {
   CIRCPAD_TRANSITION_ON_LENGTH_COUNT = 1<<6
 } circpad_transition_t;
 
+/** These constants are just for type clarification. */
+
+/** Boolean type that says if we decided to transition states or not */
+typedef enum {
+  CIRCPAD_STATE_UNCHANGED = 0,
+  CIRCPAD_STATE_CHANGED = 1
+} circpad_decision_t;
+
 /**
  * An infinite padding cell delay means don't schedule any padding --
  * simply wait until a different event triggers a transition.
@@ -449,9 +457,9 @@ void circpad_cell_event_padding_sent(circuit_t *on_circ);
 void circpad_cell_event_padding_received(circuit_t *on_circ);
 
 /** Internal events are events the machines send to themselves */
-int circpad_internal_event_infinity(circpad_machineinfo_t *mi);
-int circpad_internal_event_bins_empty(circpad_machineinfo_t *mi);
-int circpad_internal_event_state_length_up(circpad_machineinfo_t *mi);
+circpad_decision_t circpad_internal_event_infinity(circpad_machineinfo_t *mi);
+circpad_decision_t circpad_internal_event_bins_empty(circpad_machineinfo_t *mi);
+circpad_decision_t circpad_internal_event_state_length_up(circpad_machineinfo_t *mi);
 
 /** Machine creation events */
 void circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ);
@@ -465,7 +473,7 @@ void circpad_machines_free(void);
 
 void circpad_circuit_machineinfo_free(circuit_t *circ);
 
-int circpad_padding_is_from_expected_hop(circuit_t *circ,
+bool circpad_padding_is_from_expected_hop(circuit_t *circ,
                                          crypt_path_t *from_hop);
 
 /** Serializaton functions for writing to/from torrc and consensus */
@@ -476,11 +484,11 @@ const circpad_machine_t *circpad_string_to_machine(const char *str);
 int circpad_handle_padding_negotiate(circuit_t *circ, cell_t *cell);
 int circpad_handle_padding_negotiated(circuit_t *circ, cell_t *cell,
                                       crypt_path_t *layer_hint);
-int circpad_negotiate_padding(origin_circuit_t *circ,
+bool circpad_negotiate_padding(origin_circuit_t *circ,
                           circpad_machine_num_t machine,
                           int target_hopnum,
                           int command);
-int circpad_padding_negotiated(circuit_t *circ,
+bool circpad_padding_negotiated(circuit_t *circ,
                            circpad_machine_num_t machine,
                            int command,
                            int response);
