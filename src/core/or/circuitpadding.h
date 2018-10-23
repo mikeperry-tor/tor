@@ -356,6 +356,9 @@ typedef struct circpad_machine_t {
    *  the array on the circuit_t */
   uint8_t machine_index : 1;
 
+  /** Send a padding negotiate to shut down machine at end state? */
+  uint8_t negotiate_end : 1;
+
   // XXX: These next three fields are origin machine-only...
   /** Origin side or relay side */
   uint8_t origin_side : 1;
@@ -426,16 +429,6 @@ typedef struct circpad_machine_t {
 
 } circpad_machine_t;
 
-/** Padding decision upon receiving an event. (Just for unittest) */
-typedef enum {
-  CIRCPAD_WONTPAD_EVENT = 0,
-  CIRCPAD_WONTPAD_CANCELED,
-  CIRCPAD_NONPADDING_STATE,
-  CIRCPAD_WONTPAD_INFINITY,
-  CIRCPAD_PADDING_SCHEDULED,
-  CIRCPAD_PADDING_SENT
-} circpad_decision_t;
-
 void circpad_new_consensus_params(networkstatus_t *ns);
 
 /**
@@ -449,15 +442,16 @@ void circpad_deliver_recognized_relay_cell_events(circuit_t *circ,
                                                   uint8_t relay_command,
                                                   crypt_path_t *layer_hint);
 
-void circpad_event_nonpadding_sent(circuit_t *on_circ);
-void circpad_event_nonpadding_received(circuit_t *on_circ);
+/** Cell events are delivered by the above delivery functions */
+void circpad_cell_event_nonpadding_sent(circuit_t *on_circ);
+void circpad_cell_event_nonpadding_received(circuit_t *on_circ);
+void circpad_cell_event_padding_sent(circuit_t *on_circ);
+void circpad_cell_event_padding_received(circuit_t *on_circ);
 
-void circpad_event_padding_sent(circuit_t *on_circ);
-void circpad_event_padding_received(circuit_t *on_circ);
-
-void circpad_event_infinity(circpad_machineinfo_t *mi);
-void circpad_event_bins_empty(circpad_machineinfo_t *mi);
-void circpad_event_state_length_up(circpad_machineinfo_t *mi);
+/** Internal events are events the machines send to themselves */
+int circpad_internal_event_infinity(circpad_machineinfo_t *mi);
+int circpad_internal_event_bins_empty(circpad_machineinfo_t *mi);
+int circpad_internal_event_state_length_up(circpad_machineinfo_t *mi);
 
 /** Machine creation events */
 void circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ);
