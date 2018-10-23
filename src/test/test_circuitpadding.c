@@ -30,10 +30,10 @@ extern networkstatus_t *current_md_consensus;
 
 #define USEC_PER_SEC (1000000)
 circid_t get_unique_circ_id_by_chan(channel_t *chan);
-uint32_t circpad_histogram_bin_to_usec(circpad_machineinfo_t *mi,
+circpad_delay_t circpad_histogram_bin_to_usec(circpad_machineinfo_t *mi,
                                        int bin);
 int circpad_histogram_usec_to_bin(circpad_machineinfo_t *mi,
-                                       uint32_t us);
+                                       circpad_delay_t us);
 
 const circpad_state_t *circpad_machine_current_state(
         circpad_machineinfo_t *machine);
@@ -42,11 +42,11 @@ void circpad_circ_token_machine_setup(circuit_t *on_circ);
 circpad_machineinfo_t *circpad_circuit_machineinfo_new(circuit_t *on_circ,
                                                int machine_index);
 void circpad_machine_remove_higher_token(circpad_machineinfo_t *mi,
-                                         uint64_t target_bin_us);
+                                         circpad_delay_t target_bin_us);
 void circpad_machine_remove_lower_token(circpad_machineinfo_t *mi,
-                                         uint64_t target_bin_us);
+                                         circpad_delay_t target_bin_us);
 void circpad_machine_remove_closest_token(circpad_machineinfo_t *mi,
-                                         uint64_t target_bin_us,
+                                         circpad_delay_t target_bin_us,
                                          int use_usec);
 STATIC void circpad_machine_setup_tokens(circpad_machineinfo_t *mi);
 
@@ -262,7 +262,7 @@ test_circuitpadding_rtt(void *arg)
    *    a. test non-update of RTT
    * 3. Test client side circuit and non-application of RTT..
    */
-  uint32_t rtt_estimate;
+  circpad_delay_t rtt_estimate;
   (void)arg;
 
   MOCK(circuitmux_attach_circuit, circuitmux_attach_circuit_mock);
@@ -441,13 +441,13 @@ test_circuitpadding_tokens(void *arg)
   state = circpad_machine_current_state(client_side->padding_info[0]);
 
   // Test 1: converting usec->bin->usec->usec
-  for (uint32_t i = 0;
+  for (circpad_delay_t i = 0;
            i < state->start_usec + state->range_sec*USEC_PER_SEC*2;
            i++) {
     int bin = circpad_histogram_usec_to_bin(client_side->padding_info[0],
                                             i);
-    uint32_t usec = circpad_histogram_bin_to_usec(client_side->padding_info[0],
-                                                  bin);
+    circpad_delay_t usec =
+        circpad_histogram_bin_to_usec(client_side->padding_info[0], bin);
     int bin2 = circpad_histogram_usec_to_bin(client_side->padding_info[0],
                                              usec);
     tt_int_op(bin, OP_EQ, bin2);
