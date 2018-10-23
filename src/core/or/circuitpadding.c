@@ -39,7 +39,7 @@ void circpad_send_padding_cell_for_callback(circpad_machineinfo_t *mi);
 circpad_decision_t circpad_machine_remove_token(circpad_machineinfo_t *mi);
 circpad_decision_t circpad_machine_schedule_padding(circpad_machineinfo_t *);
 circpad_decision_t circpad_machine_transition(circpad_machineinfo_t *mi,
-                                              circpad_transition_t event);
+                                              circpad_event_t event);
 circpad_machineinfo_t *circpad_circuit_machineinfo_new(circuit_t *on_circ,
                                                int machine_index);
 STATIC circpad_delay_t circpad_histogram_bin_to_usec(circpad_machineinfo_t *mi,
@@ -983,7 +983,7 @@ circpad_machine_schedule_padding(circpad_machineinfo_t *mi)
  */
 circpad_decision_t
 circpad_machine_transition(circpad_machineinfo_t *mi,
-                           circpad_transition_t event)
+                           circpad_event_t event)
 {
   const circpad_state_t *state =
       circpad_machine_current_state(mi);
@@ -1197,7 +1197,7 @@ circpad_cell_event_nonpadding_sent(circuit_t *on_circ)
       /* If removing a token did not cause a transition, check if
        * non-padding sent event should */
       circpad_machine_transition(on_circ->padding_info[i],
-                                 CIRCPAD_TRANSITION_ON_NONPADDING_SENT);
+                                 CIRCPAD_EVENT_NONPADDING_SENT);
     }
   }
 }
@@ -1219,7 +1219,7 @@ circpad_cell_event_nonpadding_received(circuit_t *on_circ)
     circpad_estimate_circ_rtt_on_received(on_circ, on_circ->padding_info[i]);
 
     circpad_machine_transition(on_circ->padding_info[i],
-                               CIRCPAD_TRANSITION_ON_NONPADDING_RECV);
+                               CIRCPAD_EVENT_NONPADDING_RECV);
   }
 }
 
@@ -1237,7 +1237,7 @@ circpad_cell_event_padding_sent(circuit_t *on_circ)
   for (int i = 0; i < CIRCPAD_MAX_MACHINES && on_circ->padding_info[i];
        i++) {
     circpad_machine_transition(on_circ->padding_info[i],
-                             CIRCPAD_TRANSITION_ON_PADDING_SENT);
+                             CIRCPAD_EVENT_PADDING_SENT);
   }
 }
 
@@ -1256,7 +1256,7 @@ circpad_cell_event_padding_received(circuit_t *on_circ)
   for (int i = 0; i < CIRCPAD_MAX_MACHINES && on_circ->padding_info[i];
        i++) {
     circpad_machine_transition(on_circ->padding_info[i],
-                              CIRCPAD_TRANSITION_ON_PADDING_RECV);
+                              CIRCPAD_EVENT_PADDING_RECV);
   }
 }
 
@@ -1272,7 +1272,7 @@ circpad_cell_event_padding_received(circuit_t *on_circ)
 circpad_decision_t
 circpad_internal_event_infinity(circpad_machineinfo_t *mi)
 {
-  return circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_INFINITY);
+  return circpad_machine_transition(mi, CIRCPAD_EVENT_INFINITY);
 }
 
 /**
@@ -1286,7 +1286,7 @@ circpad_internal_event_infinity(circpad_machineinfo_t *mi)
 circpad_decision_t
 circpad_internal_event_bins_empty(circpad_machineinfo_t *mi)
 {
-  if (circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_BINS_EMPTY)
+  if (circpad_machine_transition(mi, CIRCPAD_EVENT_BINS_EMPTY)
       == CIRCPAD_STATE_CHANGED) {
     return CIRCPAD_STATE_CHANGED;
   } else {
@@ -1305,7 +1305,7 @@ circpad_internal_event_bins_empty(circpad_machineinfo_t *mi)
 circpad_decision_t
 circpad_internal_event_state_length_up(circpad_machineinfo_t *mi)
 {
-  return circpad_machine_transition(mi, CIRCPAD_TRANSITION_ON_LENGTH_COUNT);
+  return circpad_machine_transition(mi, CIRCPAD_EVENT_LENGTH_COUNT);
 }
 
 /**
@@ -1737,20 +1737,20 @@ circpad_circ_client_machine_init(void)
   circ_client_machine->origin_side = 1;
 
   circ_client_machine->start.transition_events[CIRCPAD_STATE_BURST] =
-    CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
+    CIRCPAD_EVENT_NONPADDING_RECV;
 
   circ_client_machine->burst.transition_events[CIRCPAD_STATE_BURST] =
-    CIRCPAD_TRANSITION_ON_PADDING_RECV |
-    CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
+    CIRCPAD_EVENT_PADDING_RECV |
+    CIRCPAD_EVENT_NONPADDING_RECV;
 
   /* If we are in burst state, and we send a non-padding cell, then we cancel
      the timer for the next padding cell:
      We dont want to send fake extends when actual extends are going on */
   circ_client_machine->burst.transition_cancel_events =
-    CIRCPAD_TRANSITION_ON_NONPADDING_SENT;
+    CIRCPAD_EVENT_NONPADDING_SENT;
 
   circ_client_machine->burst.transition_events[CIRCPAD_STATE_END] =
-    CIRCPAD_TRANSITION_ON_BINS_EMPTY;
+    CIRCPAD_EVENT_BINS_EMPTY;
 
   circ_client_machine->burst.token_removal = CIRCPAD_TOKEN_REMOVAL_CLOSEST;
 
@@ -1789,18 +1789,18 @@ circpad_circ_responder_machine_init(void)
   /* We transition to the burst state on padding receive and on non-padding
    * recieve */
   circ_responder_machine->start.transition_events[CIRCPAD_STATE_BURST] =
-    CIRCPAD_TRANSITION_ON_PADDING_RECV |
-    CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
+    CIRCPAD_EVENT_PADDING_RECV |
+    CIRCPAD_EVENT_NONPADDING_RECV;
 
   /* Inside the burst state we _stay_ in the burst state when a non-padding
    * is sent */
   circ_responder_machine->burst.transition_events[CIRCPAD_STATE_BURST] =
-    CIRCPAD_TRANSITION_ON_NONPADDING_SENT;
+    CIRCPAD_EVENT_NONPADDING_SENT;
 
   /* Inside the burst state we transition to the gap state when we receive a
    * padding cell */
   circ_responder_machine->burst.transition_events[CIRCPAD_STATE_GAP] =
-    CIRCPAD_TRANSITION_ON_PADDING_RECV;
+    CIRCPAD_EVENT_PADDING_RECV;
 
   /* These describe the padding charasteristics when in burst state */
 
@@ -1822,14 +1822,14 @@ circpad_circ_responder_machine_init(void)
   /* From the gap state, we _stay_ in the gap state, when we receive padding
    * or non padding */
   circ_responder_machine->gap.transition_events[CIRCPAD_STATE_GAP] =
-    CIRCPAD_TRANSITION_ON_PADDING_RECV |
-    CIRCPAD_TRANSITION_ON_NONPADDING_RECV;
+    CIRCPAD_EVENT_PADDING_RECV |
+    CIRCPAD_EVENT_NONPADDING_RECV;
 
   /* And from the gap state, we go to the end, when the bins are empty or a
    * non-padding cell is sent */
   circ_responder_machine->gap.transition_events[CIRCPAD_STATE_END] =
-    CIRCPAD_TRANSITION_ON_BINS_EMPTY |
-    CIRCPAD_TRANSITION_ON_NONPADDING_SENT;
+    CIRCPAD_EVENT_BINS_EMPTY |
+    CIRCPAD_EVENT_NONPADDING_SENT;
 
   // FIXME: Tune this histogram
 

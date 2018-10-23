@@ -43,14 +43,14 @@ typedef enum {
  * means packets destined towards the client.
  */
 typedef enum {
-  CIRCPAD_TRANSITION_ON_NONPADDING_RECV = 1<<0,
-  CIRCPAD_TRANSITION_ON_NONPADDING_SENT = 1<<1,
-  CIRCPAD_TRANSITION_ON_PADDING_SENT = 1<<2,
-  CIRCPAD_TRANSITION_ON_PADDING_RECV = 1<<3,
-  CIRCPAD_TRANSITION_ON_INFINITY = 1<<4,
-  CIRCPAD_TRANSITION_ON_BINS_EMPTY = 1<<5,
-  CIRCPAD_TRANSITION_ON_LENGTH_COUNT = 1<<6
-} circpad_transition_t;
+  CIRCPAD_EVENT_NONPADDING_RECV = 1<<0,
+  CIRCPAD_EVENT_NONPADDING_SENT = 1<<1,
+  CIRCPAD_EVENT_PADDING_SENT = 1<<2,
+  CIRCPAD_EVENT_PADDING_RECV = 1<<3,
+  CIRCPAD_EVENT_INFINITY = 1<<4,
+  CIRCPAD_EVENT_BINS_EMPTY = 1<<5,
+  CIRCPAD_EVENT_LENGTH_COUNT = 1<<6
+} circpad_event_t;
 
 /** Boolean type that says if we decided to transition states or not */
 typedef enum {
@@ -58,14 +58,14 @@ typedef enum {
   CIRCPAD_STATE_CHANGED = 1
 } circpad_decision_t;
 
-/** The type for timer delays, in microseconds */
-typedef uint32_t circpad_delay_t;
+/** The type for histogram bins */
+typedef uint16_t circpad_hist_bin_t;
 
 /** The type for absolute time, from monotime_absolute_usec() */
 typedef uint64_t circpad_time_t;
 
-/** The type for histogram bins */
-typedef uint16_t circpad_hist_bin_t;
+/** The type for timer delays, in microseconds */
+typedef uint32_t circpad_delay_t;
 
 /**
  * An infinite padding cell delay means don't schedule any padding --
@@ -230,7 +230,7 @@ typedef struct circpad_state_t {
    *
    * Example: Cancel padding if I saw a regular data packet.
    */
-  circpad_transition_t transition_cancel_events;
+  circpad_event_t transition_cancel_events;
 
   /**
    * This is an array of bitfields that specifies which direction and
@@ -240,7 +240,7 @@ typedef struct circpad_state_t {
    * Example: If the bins are empty (CIRCPAD_TRANSITION_ON_BINS_EMPTY) and that
    * bit is set in the burst state index, then transition to the burst state.
    */
-  circpad_transition_t transition_events[CIRCPAD_NUM_STATES];
+  circpad_event_t transition_events[CIRCPAD_NUM_STATES];
 
   /**
    * If true, estimate the RTT from this relay to the exit/website and add that
