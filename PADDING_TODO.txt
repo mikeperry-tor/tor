@@ -5,13 +5,6 @@ TODO sketch for this branch, in rough priority order:
    machine.
 
 - Clean up/fix XXX's and FIXMEs
-  - Bin sampling issues wrt infinity bin and beyond..
-    - May need better tests first, to check for breakage
-  - Comb over uint64 vs uint32 vs other int usage. Clarify units
-  - Better assert/BUG usage
-  - Auto-delete in end state? Or send stop command?
-    - This may be hard from the middle node.. What if padding is scheduled?
-  - Misc XXX's
   - Add tests for dists, length and iat sampling
   - Add tests for detecting padding from wrong hop
   - Add tests for machine replacement
