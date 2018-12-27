@@ -56,17 +56,24 @@ STATIC smartlist_t *origin_padding_machines = NULL;
  *  that have origin_side == 0 (ie: are for relay side) */
 STATIC smartlist_t *relay_padding_machines = NULL;
 
+/**
+ * Null machines are do-nothing machines that are placeholders for
+ * when negotiation fails, so we do not keep renegotiating. */
+STATIC circpad_machine_t null_machines[CIRCPAD_MAX_MACHINES];
+
 /** Loop over the current padding state machines using <b>loop_var</b> as the
  *  loop variable. */
-#define FOR_EACH_CIRCUIT_MACHINE_BEGIN(loop_var)                         \
+#define FOR_EACH_CIRCUIT_MACHINE_BEGIN(loop_var, circ)                    \
   STMT_BEGIN                                                             \
-  for (int loop_var = 0; loop_var < CIRCPAD_MAX_MACHINES; loop_var++) {
+  for (int loop_var = 0; loop_var < CIRCPAD_MAX_MACHINES; loop_var++) {\
+    if ((circ)->padding_machine[loop_var] == &null_machines[loop_var])  \
+      continue;
 #define FOR_EACH_CIRCUIT_MACHINE_END } STMT_END ;
 
 /** Loop over the current active padding state machines using <b>loop_var</b>
  *  as the loop variable. If a machine is not active, skip it. */
 #define FOR_EACH_ACTIVE_CIRCUIT_MACHINE_BEGIN(loop_var, circ)            \
-  FOR_EACH_CIRCUIT_MACHINE_BEGIN(loop_var)                               \
+  FOR_EACH_CIRCUIT_MACHINE_BEGIN(loop_var, circ)                         \
   if (!(circ)->padding_info[loop_var])                           \
     continue;
 #define FOR_EACH_ACTIVE_CIRCUIT_MACHINE_END } STMT_END ;
@@ -113,16 +120,19 @@ circpad_circuit_machineinfo_free_idx(circuit_t *circ, int idx)
 }
 
 /** Free all the machineinfos in <b>circ</b> that match <b>machine_num</b>. */
-static void
+static int
 free_circ_machineinfos_with_machine_num(circuit_t *circ, int machine_num)
 {
-  FOR_EACH_CIRCUIT_MACHINE_BEGIN(i) {
+  FOR_EACH_CIRCUIT_MACHINE_BEGIN(i, circ) {
     if (circ->padding_machine[i] &&
         circ->padding_machine[i]->machine_num == machine_num) {
       circpad_circuit_machineinfo_free_idx(circ, i);
       circ->padding_machine[i] = NULL;
+      return i;
     }
   } FOR_EACH_CIRCUIT_MACHINE_END;
+
+  return -1;
 }
 
 /**
@@ -131,7 +141,7 @@ free_circ_machineinfos_with_machine_num(circuit_t *circ, int machine_num)
 void
 circpad_circuit_free_all_machineinfos(circuit_t *circ)
 {
-  FOR_EACH_CIRCUIT_MACHINE_BEGIN(i) {
+  FOR_EACH_CIRCUIT_MACHINE_BEGIN(i, circ) {
     circpad_circuit_machineinfo_free_idx(circ, i);
   } FOR_EACH_CIRCUIT_MACHINE_END;
 }
@@ -1688,7 +1698,7 @@ circpad_add_matching_machines(origin_circuit_t *on_circ)
     return;
 #endif
 
-  FOR_EACH_CIRCUIT_MACHINE_BEGIN(i) {
+  FOR_EACH_CIRCUIT_MACHINE_BEGIN(i, circ) {
     /* If there is a padding machine info, this index is occupied.
      * No need to check conditions for this index. */
     if (circ->padding_info[i])
@@ -1727,6 +1737,9 @@ circpad_add_matching_machines(origin_circuit_t *on_circ)
                                   CIRCPAD_COMMAND_START) < 0) {
           circpad_circuit_machineinfo_free_idx(circ, i);
           circ->padding_machine[i] = NULL;
+          /* Set up the null machine for this index, to avoid
+           * future negotiation attempts+failures. */
+          circ->padding_machine[i] = &null_machines[i];
         } else {
           /* Success. Don't try any more machines */
           return;
@@ -1837,7 +1850,7 @@ circpad_padding_is_from_expected_hop(circuit_t *circ,
   if (!CIRCUIT_IS_ORIGIN(circ))
     return 0;
 
-  FOR_EACH_CIRCUIT_MACHINE_BEGIN(i) {
+  FOR_EACH_CIRCUIT_MACHINE_BEGIN(i, circ) {
     /* We have to check padding_machine and not padding_info/active
      * machines here because padding may arrive after we shut down a
      * machine. The info is gone, but the padding_machine waits
@@ -2162,6 +2175,20 @@ circpad_circ_responder_machine_init(void)
 }
 #endif
 
+static void
+circpad_setup_null_machines(void)
+{
+  null_machines[0].is_origin_side = 1;
+  null_machines[0].num_states = 0;
+  null_machines[0].target_hopnum = 0;
+  null_machines[0].machine_index = 0;
+
+  null_machines[1].is_origin_side = 1;
+  null_machines[1].num_states = 0;
+  null_machines[1].target_hopnum = 0;
+  null_machines[1].machine_index = 1;
+}
+
 /**
  * Initialize all of our padding machines.
  *
@@ -2176,6 +2203,8 @@ circpad_machines_init(void)
 
   origin_padding_machines = smartlist_new();
   relay_padding_machines = smartlist_new();
+
+  circpad_setup_null_machines();
 
   // TODO: Parse machines from consensus and torrc
 #ifdef TOR_UNIT_TESTS
@@ -2440,9 +2469,15 @@ circpad_handle_padding_negotiated(circuit_t *circ, cell_t *cell,
              negotiated->response == CIRCPAD_RESPONSE_ERR) {
     // This can happen due to consensus drift.. free the machines
     // and be sad
-    free_circ_machineinfos_with_machine_num(circ, negotiated->machine_type);
+    int idx = free_circ_machineinfos_with_machine_num(circ,
+              negotiated->machine_type);
     log_fn(LOG_INFO, LD_CIRC,
            "Middle node did not accept our padding request.");
+    if (idx > 0) {
+      /* Set up the null machine for this index, to avoid future
+       * negotiation attempts and failurs. */
+      circ->padding_machine[idx] = &null_machines[idx];
+    }
   }
 
   circpad_negotiated_free(negotiated);
