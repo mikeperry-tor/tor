@@ -157,7 +157,7 @@ dummy_origin_circuit_new(int n_cells)
     crypto_rand((void*)&cell, sizeof(cell));
     cell_queue_append_packed_copy(TO_CIRCUIT(circ),
                                   &TO_CIRCUIT(circ)->n_chan_cells,
-                                  1, &cell, 1, 0);
+                                  1, &cell, 1, 0, 0);
   }
 
   TO_CIRCUIT(circ)->purpose = CIRCUIT_PURPOSE_C_GENERAL;

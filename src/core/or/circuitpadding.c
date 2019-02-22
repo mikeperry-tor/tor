@@ -980,10 +980,8 @@ circpad_decision_t
 circpad_send_padding_cell_for_callback(circpad_machine_state_t *mi)
 {
   circuit_t *circ = mi->on_circ;
-  int machine_idx = mi->machine_index;
   mi->padding_scheduled_at_usec = 0;
   mi->is_padding_timer_scheduled = 0;
-  circpad_statenum_t state = mi->current_state;
 
   // Make sure circuit didn't close on us
   if (mi->on_circ->marked_for_close) {
@@ -1044,21 +1042,10 @@ circpad_send_padding_cell_for_callback(circpad_machine_state_t *mi)
   }
 
   rep_hist_padding_count_write(PADDING_TYPE_DROP);
-  /* This is a padding cell sent from the client or from the middle node,
-   * (because it's invoked from circuitpadding.c) */
-  circpad_cell_event_padding_sent(circ);
 
-  /* The circpad_cell_event_padding_sent() could cause us to transition.
-   * Check that we still have a padding machineinfo, and then check our token
-   * supply. */
-  if (circ->padding_info[machine_idx] != NULL) {
-    if (state != circ->padding_info[machine_idx]->current_state)
-      return CIRCPAD_STATE_CHANGED;
-    else
-      return check_machine_token_supply(circ->padding_info[machine_idx]);
-  } else {
-    return CIRCPAD_STATE_CHANGED;
-  }
+  /* We no longer emit the sent padding event here, so we can't
+   * change state */
+  return CIRCPAD_STATE_UNCHANGED;
 }
 
 /**
@@ -1551,8 +1538,16 @@ void
 circpad_cell_event_padding_sent(circuit_t *on_circ)
 {
   FOR_EACH_ACTIVE_CIRCUIT_MACHINE_BEGIN(i, on_circ) {
-    circpad_machine_spec_transition(on_circ->padding_info[i],
+    /* We need to check token supply here because it was decremented
+     * but not checked. We check it now because this event is when the
+     * padding goes on the wire.
+     *
+     * If the state changes, we don't check for transition again. */
+    if (check_machine_token_supply(on_circ->padding_info[i]) ==
+        CIRCPAD_STATE_UNCHANGED) {
+      circpad_machine_spec_transition(on_circ->padding_info[i],
                              CIRCPAD_EVENT_PADDING_SENT);
+    }
   } FOR_EACH_ACTIVE_CIRCUIT_MACHINE_END;
 }
 
@@ -1952,8 +1947,11 @@ circpad_deliver_unrecognized_cell_events(circuit_t *circ,
     circpad_cell_event_nonpadding_received(circ);
   } else if (dir == CELL_DIRECTION_IN) {
     /* It's in and not origin, so the cell is going away from us.
-     * So we are relaying a non-padding cell towards the origin. */
-    circpad_cell_event_nonpadding_sent(circ);
+     * So we are relaying a non-padding cell towards the origin.
+     * However, this case is handled by the call to
+     * circpad_deliver_sent_relay_cell_events() from
+     * channel_flush_from_first_active_circuit().
+     */
   }
 }
 
@@ -2012,26 +2010,14 @@ void
 circpad_deliver_sent_relay_cell_events(circuit_t *circ,
                                        uint8_t relay_command)
 {
-  /* Padding negotiate cells are ignored by the state machines
-   * for simplicity. */
-  if (relay_command == RELAY_COMMAND_PADDING_NEGOTIATE ||
-      relay_command == RELAY_COMMAND_PADDING_NEGOTIATED) {
-    return;
-  }
-
   /* RELAY_COMMAND_DROP is the multi-hop (aka circuit-level) padding cell in
    * tor. (CELL_PADDING is a channel-level padding cell, which is not relayed
    * or processed here) */
   if (relay_command == RELAY_COMMAND_DROP) {
-    /* Optimization: The event for RELAY_COMMAND_DROP is sent directly
-     * from circpad_send_padding_cell_for_callback(). This is to avoid
-     * putting a cell_t and a relay_header_t on the stack repeatedly
-     * if we decide to send a long train of padidng cells back-to-back
-     * with 0 delay. So we do nothing here. */
-    return;
+    circpad_cell_event_padding_sent(circ);
   } else {
-    /* This is a non-padding cell sent from the client or from
-     * this node. */
+    /* This is a non-padding cell sent from the client or
+     * relayed through this node. */
     circpad_cell_event_nonpadding_sent(circ);
   }
 }

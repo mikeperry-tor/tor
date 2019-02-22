@@ -347,7 +347,7 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
                                   * we might kill the circ before we relay
                                   * the cells. */
 
-  append_cell_to_circuit_queue(circ, chan, cell, cell_direction, 0);
+  append_cell_to_circuit_queue(circ, chan, cell, cell_direction, 0, 0);
   return 0;
 }
 
@@ -359,7 +359,7 @@ MOCK_IMPL(int,
 circuit_package_relay_cell, (cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
                            crypt_path_t *layer_hint, streamid_t on_stream,
-                           const char *filename, int lineno))
+                           const char *filename, int lineno, int is_padding))
 {
   channel_t *chan; /* where to send the cell */
 
@@ -412,7 +412,8 @@ circuit_package_relay_cell, (cell_t *cell, circuit_t *circ,
   }
   ++stats_n_relay_cells_relayed;
 
-  append_cell_to_circuit_queue(circ, chan, cell, cell_direction, on_stream);
+  append_cell_to_circuit_queue(circ, chan, cell, cell_direction, on_stream,
+                               is_padding);
   return 0;
 }
 
@@ -581,9 +582,6 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   log_debug(LD_OR,"delivering %d cell %s.", relay_command,
             cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward");
 
-  /* Tell circpad we're sending a relay cell */
-  circpad_deliver_sent_relay_cell_events(circ, relay_command);
-
   /* If we are sending an END cell and this circuit is used for a tunneled
    * directory request, advance its state. */
   if (relay_command == RELAY_COMMAND_END && circ->dirreq_id)
@@ -640,7 +638,8 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   }
 
   if (circuit_package_relay_cell(&cell, circ, cell_direction, cpath_layer,
-                                 stream_id, filename, lineno) < 0) {
+                                 stream_id, filename, lineno,
+                                 relay_command == RELAY_COMMAND_DROP) < 0) {
     log_warn(LD_BUG,"circuit_package_relay_cell failed. Closing.");
     circuit_mark_for_close(circ, END_CIRC_REASON_INTERNAL);
     return -1;
@@ -2477,13 +2476,15 @@ cell_queue_append(cell_queue_t *queue, packed_cell_t *cell)
 void
 cell_queue_append_packed_copy(circuit_t *circ, cell_queue_t *queue,
                               int exitward, const cell_t *cell,
-                              int wide_circ_ids, int use_stats)
+                              int wide_circ_ids, int use_stats,
+                              int is_padding)
 {
   packed_cell_t *copy = packed_cell_copy(cell, wide_circ_ids);
   (void)circ;
   (void)exitward;
   (void)use_stats;
 
+  copy->is_padding = is_padding;
   copy->inserted_timestamp = monotime_coarse_get_stamp();
 
   cell_queue_append(queue, copy);
@@ -2881,6 +2882,20 @@ channel_flush_from_first_active_circuit, (channel_t *chan, int max))
      */
     cell = cell_queue_pop(queue);
 
+    /*
+     * The cell is being "sent" from our perspective. Check to see
+     * if it was packed as a padding cell or not, and tell circpad.
+     *
+     * This must be done as close to the outbuf as possible because
+     * we want our events to reflect the wire as closely as possible.
+     * (According to https://matt.traudt.xyz/static/papers/kist-tops2018.pdf,
+     * there is only queueing delay in the write direction, so we don't
+     * need this same complication on receive). */
+    if (cell) {
+      circpad_deliver_sent_relay_cell_events(circ,
+            cell->is_padding ? RELAY_COMMAND_DROP : RELAY_COMMAND_DATA);
+    }
+
     /* Calculate the exact time that this cell has spent in the queue. */
     if (get_options()->CellStatistics ||
         get_options()->TestingEnableCellStatsEvent) {
@@ -3021,7 +3036,7 @@ relay_consensus_has_changed(const networkstatus_t *ns)
 void
 append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
                              cell_t *cell, cell_direction_t direction,
-                             streamid_t fromstream)
+                             streamid_t fromstream, int is_padding)
 {
   or_circuit_t *orcirc = NULL;
   cell_queue_t *queue;
@@ -3054,7 +3069,7 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
   /* Very important that we copy to the circuit queue because all calls to
    * this function use the stack for the cell memory. */
   cell_queue_append_packed_copy(circ, queue, exitward, cell,
-                                chan->wide_circ_ids, 1);
+                                chan->wide_circ_ids, 1, is_padding);
 
   /* Check and run the OOM if needed. */
   if (PREDICT_UNLIKELY(cell_queues_check_size())) {

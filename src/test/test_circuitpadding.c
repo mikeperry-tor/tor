@@ -181,7 +181,7 @@ static int
 circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
                            crypt_path_t *layer_hint, streamid_t on_stream,
-                           const char *filename, int lineno);
+                           const char *filename, int lineno, int is_padding);
 
 static void
 circuitmux_attach_circuit_mock(circuitmux_t *cmux, circuit_t *circ,
@@ -202,9 +202,10 @@ static int
 circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
                            crypt_path_t *layer_hint, streamid_t on_stream,
-                           const char *filename, int lineno)
+                           const char *filename, int lineno, int is_padding)
 {
   (void)cell; (void)on_stream; (void)filename; (void)lineno;
+  (void)is_padding;
 
   if (circ == client_side) {
     if (cell->payload[0] == RELAY_COMMAND_PADDING_NEGOTIATE) {

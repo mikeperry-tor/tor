@@ -51,14 +51,14 @@ dummy_or_circuit_new(int n_p_cells, int n_n_cells)
   for (i=0; i < n_p_cells; ++i) {
     crypto_rand((void*)&cell, sizeof(cell));
     cell_queue_append_packed_copy(TO_CIRCUIT(circ), &circ->p_chan_cells,
-                                  0, &cell, 1, 0);
+                                  0, &cell, 1, 0, 0);
   }
 
   for (i=0; i < n_n_cells; ++i) {
     crypto_rand((void*)&cell, sizeof(cell));
     cell_queue_append_packed_copy(TO_CIRCUIT(circ),
                                   &TO_CIRCUIT(circ)->n_chan_cells,
-                                  1, &cell, 1, 0);
+                                  1, &cell, 1, 0, 0);
   }
 
   TO_CIRCUIT(circ)->purpose = CIRCUIT_PURPOSE_OR;

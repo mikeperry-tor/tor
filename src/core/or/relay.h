@@ -63,11 +63,12 @@ void cell_queue_clear(cell_queue_t *queue);
 void cell_queue_append(cell_queue_t *queue, packed_cell_t *cell);
 void cell_queue_append_packed_copy(circuit_t *circ, cell_queue_t *queue,
                                    int exitward, const cell_t *cell,
-                                   int wide_circ_ids, int use_stats);
+                                   int wide_circ_ids, int use_stats,
+                                   int is_padding);
 
 void append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
                                   cell_t *cell, cell_direction_t direction,
-                                  streamid_t fromstream);
+                                  streamid_t fromstream, int is_padding);
 
 void destroy_cell_queue_init(destroy_cell_queue_t *queue);
 void destroy_cell_queue_clear(destroy_cell_queue_t *queue);
@@ -81,7 +82,7 @@ MOCK_DECL(int, channel_flush_from_first_active_circuit,
 MOCK_DECL(int, circuit_package_relay_cell, (cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
                            crypt_path_t *layer_hint, streamid_t on_stream,
-                           const char *filename, int lineno));
+                           const char *filename, int lineno, int is_padding));
 
 void update_circuit_on_cmux_(circuit_t *circ, cell_direction_t direction,
                              const char *file, int lineno);
