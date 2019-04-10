@@ -320,7 +320,7 @@ circpad_histogram_bin_to_usec(const circpad_machine_runtime_t *mi,
 
   /* The infinity bin has an upper bound of infinity, so make sure we return
    * that if they ask for it. */
-  if (bin > CIRCPAD_INFINITY_BIN(mi)) {
+  if (bin > CIRCPAD_INFINITY_BIN(state)) {
     return CIRCPAD_DELAY_INFINITE;
   }
 
@@ -409,7 +409,7 @@ circpad_machine_setup_tokens(circpad_machine_runtime_t *mi)
 
   /* If this state doesn't exist, or doesn't have token removal,
    * free any previous state's histogram, and bail */
-  if (!state) {
+  if (!state || state->token_removal == CIRCPAD_TOKEN_REMOVAL_NONE) {
     if (mi->histogram) {
       tor_free(mi->histogram);
       mi->histogram = NULL;
