@@ -38,6 +38,7 @@ Written by Mike Perry and George Kadianakis.
     - [7.3. Better Machine Negotiation](#73-better-machine-negotiation)
     - [7.4. Probabilistic State Transitions](#74-probabilistic-state-transitions)
     - [7.5. Improved Simulation Mechanisms](#75-improved-simulation-mechanisms)
+    - [7.6. Cell Arrival Pattern Recognition](#76-cell-arrival-pattern-recognition)
 - [8. Open Research Problems](#8-open-research-problems)
     - [8.1. Onion Service Circuit Setup](#81-onion-service-circuit-setup)
     - [8.2. Onion Service Fingerprinting](#82-onion-service-fingerprinting)
@@ -1042,13 +1043,14 @@ simplified packet-trace simulator.
 Tor's unit test framework should make this simulator relatively easy to build.
 See [ticket 31788](https://bugs.torproject.org/31788) for details.
 
-### 7.6. Reactions to Cell Arrival Patterns
+### 7.6. Cell Arrival Pattern Recognition
 
 Right now, if you wish your machine to react to a certain count of incoming
 cells in a row, you have to have a state for each cell, and use the infinity
 bin to timeout of the sequence in each state. We could make this more compact
 if each state had an arrival cell counter and inter-cell timeout. Or we could
-make more complex mechanisms.
+make more complex mechanisms to recognize certain patterns of arrival traffic
+in a state.
 
 XXX: Ticket for this
 
