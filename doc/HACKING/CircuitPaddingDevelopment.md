@@ -990,13 +990,14 @@ should be an accurate reflection of when they are actually sent on the wire.
 
 To make matters worse, Tor's current timers are not as precise as some
 padding designs would require.  Even if we solve the queuing issues, we
-will still have issues of timing precision to solve.
+will still have issues of timing precision to solve. XXX: document the
+situation after solving [ticket 31653](https://bugs.torproject.org/31653)
 
 If your padding machine and problem space depends on very accurate notions of
 relay-side packet timing, please try that branch and let us know on the
 ticket if you need any further assistance fixing it up.
 
-Additionally, with that change, it will be possible to provide further
+Additionally, with these changes, it will be possible to provide further
 overhead reducing optimizations by letting machines specify flags to indicate
 that padding should not be sent if there are any cells pending in the cell
 queue, for doing things like extending cell bursts more accurately and with
@@ -1040,6 +1041,16 @@ simplified packet-trace simulator.
 
 Tor's unit test framework should make this simulator relatively easy to build.
 See [ticket 31788](https://bugs.torproject.org/31788) for details.
+
+### 7.6. Reactions to Cell Arrival Patterns
+
+Right now, if you wish your machine to react to a certain count of incoming
+cells in a row, you have to have a state for each cell, and use the infinity
+bin to timeout of the sequence in each state. We could make this more compact
+if each state had an arrival cell counter and inter-cell timeout. Or we could
+make more complex mechanisms.
+
+XXX: Ticket for this
 
 
 ## 8. Open Research Problems
