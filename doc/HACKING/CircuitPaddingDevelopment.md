@@ -44,7 +44,7 @@ Written by Mike Perry and George Kadianakis.
     - [8.3. Open World Fingerprinting](#83-open-world-fingerprinting)
     - [8.4. Protocol Usage Fingerprinting](#84-protocol-usage-fingerprinting)
     - [8.5. Datagram Transport Side Channels](#85-datagram-transport-side-channels)
-- [9. Must Read Papers](#9-must-read-papers
+- [9. Must Read Papers](#9-must-read-papers)
 
 
 ## 0. Background
