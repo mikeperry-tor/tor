@@ -748,12 +748,9 @@ circpad_machine_spec_transition, (circpad_machine_runtime_t *mi,
 circpad_decision_t circpad_send_padding_cell_for_callback(
                                  circpad_machine_runtime_t *mi);
 
-void circpad_free_all(void);
+MOCK_DECL(void, circpad_trace_event,(const char *event, const circuit_t *circ));
 
-// called by circpad_cell_event_* and circpad_machine_event_* callbacks for the
-// specific event, used to generate traces for circpad simulations.
-MOCK_DECL(void,
-circpad_event_callback, (const char *event, uint32_t circuit_identifier));
+void circpad_free_all(void);
 
 #ifdef CIRCUITPADDING_PRIVATE
 STATIC void  machine_spec_free_(circpad_machine_spec_t *m);
