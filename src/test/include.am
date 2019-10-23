@@ -118,7 +118,6 @@ src_test_test_SOURCES += \
 	src/test/test_channel.c \
 	src/test/test_channelpadding.c \
 	src/test/test_circuitpadding.c \
-	src/test/test_circuitpadding_sim.c \
 	src/test/test_channeltls.c \
 	src/test/test_checkdir.c \
 	src/test/test_circuitlist.c \
@@ -339,8 +338,6 @@ src_test_test_timers_LDFLAGS = $(src_test_test_LDFLAGS)
 
 # ADD_C_FILE: INSERT HEADERS HERE.
 noinst_HEADERS+= \
-	src/test/circuitpadding_sim_arg.h \
-	src/test/circuitpadding_sim_test_traces.inc \
 	src/test/fakechans.h \
 	src/test/hs_test_helpers.h \
 	src/test/log_test_helpers.h \
