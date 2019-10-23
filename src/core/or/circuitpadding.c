@@ -3077,8 +3077,8 @@ circpad_free_all(void)
 MOCK_IMPL(void,
 circpad_event_callback,(const char *event, uint32_t circuit_identifier))
 {
-  (void)event;
-  (void)circuit_identifier;
+  log_fn(LOG_INFO, LD_CIRC, "%ld %d %s", 
+         monotime_absolute_nsec(), circuit_identifier, event);
 }
 
 /* Serialization */
