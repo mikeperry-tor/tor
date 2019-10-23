@@ -1791,7 +1791,7 @@ circpad_estimate_circ_rtt_on_send(circuit_t *circ,
 void
 circpad_cell_event_nonpadding_sent(circuit_t *on_circ)
 {
-  circpad_event_callback("circpad_cell_event_nonpadding_sent", 
+  circpad_event_callback(__func__, 
                          CIRCUIT_IS_ORIGIN(on_circ) ? 
                          TO_ORIGIN_CIRCUIT(on_circ)->global_identifier : 0);
 
@@ -1885,7 +1885,7 @@ circpad_check_received_cell(cell_t *cell, circuit_t *circ,
 void
 circpad_cell_event_nonpadding_received(circuit_t *on_circ)
 {
-  circpad_event_callback("circpad_cell_event_nonpadding_received", 
+  circpad_event_callback(__func__,
                          CIRCUIT_IS_ORIGIN(on_circ) ? 
                          TO_ORIGIN_CIRCUIT(on_circ)->global_identifier : 0);
 
@@ -1910,7 +1910,7 @@ circpad_cell_event_nonpadding_received(circuit_t *on_circ)
 void
 circpad_cell_event_padding_sent(circuit_t *on_circ)
 {
-  circpad_event_callback("circpad_cell_event_padding_sent", 
+  circpad_event_callback(__func__, 
                          CIRCUIT_IS_ORIGIN(on_circ) ? 
                          TO_ORIGIN_CIRCUIT(on_circ)->global_identifier : 0);
 
@@ -1940,7 +1940,7 @@ circpad_cell_event_padding_sent(circuit_t *on_circ)
 void
 circpad_cell_event_padding_received(circuit_t *on_circ)
 {
-  circpad_event_callback("circpad_cell_event_padding_received", 
+  circpad_event_callback(__func__,
                          CIRCUIT_IS_ORIGIN(on_circ) ? 
                          TO_ORIGIN_CIRCUIT(on_circ)->global_identifier : 0);
 
@@ -2212,7 +2212,7 @@ circpad_add_matching_machines(origin_circuit_t *on_circ,
 void
 circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ)
 {
-  circpad_event_callback("circpad_machine_event_circ_added_hop",
+  circpad_event_callback(__func__,
                          on_circ->global_identifier);
 
   /* Since our padding conditions do not specify a max_hops,
@@ -2229,7 +2229,7 @@ circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ)
 void
 circpad_machine_event_circ_built(origin_circuit_t *circ)
 {
-  circpad_event_callback("circpad_machine_event_circ_built",
+  circpad_event_callback(__func__,
                          circ->global_identifier);
   circpad_shutdown_old_machines(circ);
   circpad_add_matching_machines(circ, origin_padding_machines);
@@ -2244,7 +2244,7 @@ circpad_machine_event_circ_built(origin_circuit_t *circ)
 void
 circpad_machine_event_circ_purpose_changed(origin_circuit_t *circ)
 {
-  circpad_event_callback("circpad_machine_event_circ_purpose_changed",
+  circpad_event_callback(__func__,
                          circ->global_identifier);
 
   circpad_shutdown_old_machines(circ);
@@ -2261,7 +2261,7 @@ circpad_machine_event_circ_purpose_changed(origin_circuit_t *circ)
 void
 circpad_machine_event_circ_has_no_relay_early(origin_circuit_t *circ)
 {
-  circpad_event_callback("circpad_machine_event_circ_has_no_relay_early",
+  circpad_event_callback(__func__,
                          circ->global_identifier);
 
   circpad_shutdown_old_machines(circ);
@@ -2279,7 +2279,7 @@ circpad_machine_event_circ_has_no_relay_early(origin_circuit_t *circ)
 void
 circpad_machine_event_circ_has_streams(origin_circuit_t *circ)
 {
-  circpad_event_callback("circpad_machine_event_circ_has_streams",
+  circpad_event_callback(__func__,
                          circ->global_identifier);
 
   circpad_shutdown_old_machines(circ);
@@ -2297,7 +2297,7 @@ circpad_machine_event_circ_has_streams(origin_circuit_t *circ)
 void
 circpad_machine_event_circ_has_no_streams(origin_circuit_t *circ)
 {
-  circpad_event_callback("circpad_machine_event_circ_has_no_streams",
+  circpad_event_callback(__func__,
                          circ->global_identifier);
 
   circpad_shutdown_old_machines(circ);

@@ -3102,9 +3102,10 @@ connection_ap_handshake_send_begin,(entry_connection_t *ap_conn))
     payload_len += 4;
   }
 
+  // XXX: Can we do better than this somehow?
   char circpadmsg[CELL_PAYLOAD_SIZE];
   tor_snprintf(circpadmsg, RELAY_PAYLOAD_SIZE,
-              "connection_ap_handshake_send_begin %s",
+              "%s %s", __func__,
               (ap_conn->socks_request->address));
   circpad_event_callback(circpadmsg, circ->global_identifier);
 
