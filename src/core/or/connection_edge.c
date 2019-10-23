@@ -3103,11 +3103,12 @@ connection_ap_handshake_send_begin,(entry_connection_t *ap_conn))
   }
 
   // XXX: Can we do better than this somehow?
+  // This will also miss HS service-side streams
   char circpadmsg[CELL_PAYLOAD_SIZE];
   tor_snprintf(circpadmsg, RELAY_PAYLOAD_SIZE,
               "%s %s", __func__,
               (ap_conn->socks_request->address));
-  circpad_event_callback(circpadmsg, circ->global_identifier);
+  circpad_trace_event(circpadmsg, TO_CIRCUIT(circ));
 
   log_info(LD_APP,
            "Sending relay cell %d on circ %u to begin stream %d.",
