@@ -26,6 +26,7 @@ struct circpad_negotiate_st {
   uint8_t machine_type;
   /** If true, send a relay_drop reply.. */
   uint8_t echo_request;
+  uint32_t client_circid;
   uint8_t trunnel_error_code_;
 };
 #endif
@@ -118,6 +119,15 @@ uint8_t circpad_negotiate_get_echo_request(const circpad_negotiate_t *inp);
  * code on 'inp' on failure.
  */
 int circpad_negotiate_set_echo_request(circpad_negotiate_t *inp, uint8_t val);
+/** Return the value of the client_circid field of the
+ * circpad_negotiate_t in 'inp'
+ */
+uint32_t circpad_negotiate_get_client_circid(const circpad_negotiate_t *inp);
+/** Set the value of the client_circid field of the
+ * circpad_negotiate_t in 'inp' to 'val'. Return 0 on success; return
+ * -1 and set the error code on 'inp' on failure.
+ */
+int circpad_negotiate_set_client_circid(circpad_negotiate_t *inp, uint32_t val);
 /** Return a newly allocated circpad_negotiated with all elements set
  * to zero.
  */

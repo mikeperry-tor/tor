@@ -112,6 +112,17 @@ circpad_negotiate_set_echo_request(circpad_negotiate_t *inp, uint8_t val)
   inp->echo_request = val;
   return 0;
 }
+uint32_t
+circpad_negotiate_get_client_circid(const circpad_negotiate_t *inp)
+{
+  return inp->client_circid;
+}
+int
+circpad_negotiate_set_client_circid(circpad_negotiate_t *inp, uint32_t val)
+{
+  inp->client_circid = val;
+  return 0;
+}
 const char *
 circpad_negotiate_check(const circpad_negotiate_t *obj)
 {
@@ -148,6 +159,9 @@ circpad_negotiate_encoded_len(const circpad_negotiate_t *obj)
 
   /* Length of u8 echo_request IN [0, 1] */
   result += 1;
+
+  /* Length of u32 client_circid */
+  result += 4;
   return result;
 }
 int
@@ -202,6 +216,13 @@ circpad_negotiate_encode(uint8_t *output, const size_t avail, const circpad_nego
     goto truncated;
   trunnel_set_uint8(ptr, (obj->echo_request));
   written += 1; ptr += 1;
+
+  /* Encode u32 client_circid */
+  trunnel_assert(written <= avail);
+  if (avail - written < 4)
+    goto truncated;
+  trunnel_set_uint32(ptr, trunnel_htonl(obj->client_circid));
+  written += 4; ptr += 4;
 
 
   trunnel_assert(ptr == output + written);
@@ -263,6 +284,11 @@ circpad_negotiate_parse_into(circpad_negotiate_t *obj, const uint8_t *input, con
   remaining -= 1; ptr += 1;
   if (! (obj->echo_request == 0 || obj->echo_request == 1))
     goto fail;
+
+  /* Parse u32 client_circid */
+  CHECK_REMAINING(4, truncated);
+  obj->client_circid = trunnel_ntohl(trunnel_get_uint32(ptr));
+  remaining -= 4; ptr += 4;
   trunnel_assert(ptr + remaining == input + len_in);
   return len_in - remaining;
 
