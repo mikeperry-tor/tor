@@ -1,5 +1,5 @@
 #ifndef TOR_CIRCUITPADDING_SIM_ARG_H
-#define TOR_CIRCUITPADDING_SIM_ARG_
+#define TOR_CIRCUITPADDING_SIM_ARG_H
 
 const char *circpad_sim_arg_client_trace, *circpad_sim_arg_relay_trace;
 

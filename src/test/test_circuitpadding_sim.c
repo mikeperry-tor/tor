@@ -213,7 +213,7 @@ circpad_sim_print_trace(smartlist_t *trace, int n)
   for (int i = 0; i < n && i < smartlist_len(trace); i++) {
     circpad_sim_event *ev = circpad_sim_pop_event(trace);
     smartlist_add(tmp, ev);
-    log_debug(LD_CIRC, "%012ld %s", ev->timestamp, ev->event);
+    log_debug(LD_CIRC, "%012"PRId64" %s", ev->timestamp, ev->event);
   }
   SMARTLIST_FOREACH(tmp, 
                     circpad_sim_event *, ev, circpad_sim_push_event(ev, trace));
@@ -228,11 +228,11 @@ circpad_sim_print_combined_trace(smartlist_t *t1, smartlist_t *t2, int n)
     circpad_sim_event *ev;
     if (circpad_sim_peak_event(t1)->timestamp < circpad_sim_peak_event(t2)->timestamp) {
       ev = circpad_sim_pop_event(t1);
-      log_debug(LD_CIRC, "%012ld c %s", ev->timestamp, ev->event);
+      log_debug(LD_CIRC, "%012"PRId64" c %s", ev->timestamp, ev->event);
       smartlist_add(t1_tmp, ev);
     } else {
       ev = circpad_sim_pop_event(t2);
-      log_debug(LD_CIRC, "%012ld r %s", ev->timestamp, ev->event);
+      log_debug(LD_CIRC, "%012"PRId64" r %s", ev->timestamp, ev->event);
       smartlist_add(t2_tmp, ev);
     }
   }
@@ -250,7 +250,7 @@ circpad_sim_results_trace_client(void)
   circpad_sim_event *event;
   while (smartlist_len(out_client_trace)) {
     event = circpad_sim_pop_event(out_client_trace);
-    log_info(LD_CIRC, "%012ld %s", event->timestamp, event->event);
+    log_info(LD_CIRC, "%012"PRId64" %s", event->timestamp, event->event);
     circpad_sim_event_free(event);
   }
 }
@@ -261,7 +261,7 @@ circpad_sim_results_trace_relay(void)
   circpad_sim_event *event;
   while (smartlist_len(out_relay_trace)) {
     event = circpad_sim_pop_event(out_relay_trace);
-    log_info(LD_CIRC, "%012ld %s", event->timestamp, event->event);
+    log_info(LD_CIRC, "%012"PRId64" %s", event->timestamp, event->event);
     circpad_sim_event_free(event);
   }
 }
@@ -676,10 +676,10 @@ circpad_event_callback_mock(const char *event,
   // relay-side has identifier 0, clients > 0
   if (circuit_identifier) {
     circpad_sim_push_event(e, out_client_trace);
-    log_debug(LD_CIRC, "%012ld c %s", e->timestamp, e->event);
+    log_debug(LD_CIRC, "%012"PRId64" c %s", e->timestamp, e->event);
   } else {
     circpad_sim_push_event(e, out_relay_trace);
-    log_debug(LD_CIRC, "%012ld r %s", e->timestamp, e->event);
+    log_debug(LD_CIRC, "%012"PRId64" r %s", e->timestamp, e->event);
   }
 
   // we always move the timer ahead by the least possible after each event
@@ -830,7 +830,7 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
     e->timestamp = (curr_mocked_time-actual_mocked_monotime_start) + 
                    circpad_sim_sample_latency();
     circpad_sim_push_event(e, relay_trace);
-    log_debug(LD_CIRC, "%012ld mock relay %s to relay_trace at %ld", 
+    log_debug(LD_CIRC, "%012"PRId64" mock relay %s to relay_trace at %"PRId64, 
       curr_mocked_time-actual_mocked_monotime_start, e->event, e->timestamp);
   } else if (circ == relay_side) {
     tt_int_op(cell_direction, OP_EQ, CELL_DIRECTION_IN);
@@ -849,7 +849,7 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
     e->timestamp = (curr_mocked_time-actual_mocked_monotime_start) + 
                    circpad_sim_sample_latency();
     circpad_sim_push_event(e, client_trace);
-    log_debug(LD_CIRC, "%012ld mock relay %s to client_trace at %ld", 
+    log_debug(LD_CIRC, "%012"PRId64" mock relay %s to client_trace at %"PRId64, 
       curr_mocked_time-actual_mocked_monotime_start, e->event, e->timestamp);
   }
 
