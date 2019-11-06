@@ -834,6 +834,7 @@ struct testgroup_t testgroups[] = {
   { "checkdir/", checkdir_tests },
   { "circuitbuild/", circuitbuild_tests },
   { "circuitpadding/", circuitpadding_tests },
+  { "circuitpadding_sim/", circuitpadding_sim_tests },
   { "circuitlist/", circuitlist_tests },
   { "circuitmux/", circuitmux_tests },
   { "circuitstats/", circuitstats_tests },
