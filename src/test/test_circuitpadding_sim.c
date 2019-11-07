@@ -56,11 +56,8 @@
 
 // The strings of events are mapped to the below type by the simulator when we
 // parse the input traces, with support for unknown events. The unknown events
-// are passed through the simulator as-is to the output. This is useful, e.g.,
-// for events related to starting a handshake to a domain (see
-// connection_ap_handshake_send_begin events in the example traces) that we care
-// a lot of about for making (maybe too optimistic) website fingerprinting
-// traces.
+// are passed through the simulator as-is to the output. A warning is issued
+// for unknown events to ensure that the simulator is updated.
 typedef enum {
   CIRCPAD_SIM_CELL_EVENT_UNKNOWN = 0,
   CIRCPAD_SIM_CELL_EVENT_PADDING_SENT = 1,
@@ -138,18 +135,6 @@ static int circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
                            crypt_path_t *layer_hint, streamid_t on_stream,
                            const char *filename, int lineno);
 
-// The circuidpadding framework is patched for the simulator to generate events
-// to the torlog as input to the simulator. Here we re-use the same function to
-// collect the output of the simulator into two queues. 
-static void circpad_trace_event_mock(const char *event, 
-                                     const circuit_t *circ);
-// Once we've collected the output, the end of the simulation calls two
-// functions to output the client and relay traces using Tor's logging
-// framework. The framework prefixes each line with the function it's called
-// from, so this way it's easy to "grep" for the respective output.
-static void circpad_sim_results_trace_relay(void);
-static void circpad_sim_results_trace_client(void);
-
 // mocked functions and helpers to get the circuitpadding framework to work in
 // the unit testing framework, 99% copied directly from test_circuitpadding.c
 static void circuitmux_attach_circuit_mock(circuitmux_t *cmux, circuit_t *circ,
@@ -208,8 +193,6 @@ static int64_t sim_latency_mean;
 // the core working queues of traces, input and output
 static smartlist_t *client_trace = NULL;
 static smartlist_t *relay_trace = NULL;
-static smartlist_t *out_client_trace = NULL;
-static smartlist_t *out_relay_trace = NULL;
 
 static void
 circpad_sim_print_trace(smartlist_t *trace, int n)
@@ -223,52 +206,6 @@ circpad_sim_print_trace(smartlist_t *trace, int n)
   SMARTLIST_FOREACH(tmp, 
                     circpad_sim_event *, ev, circpad_sim_push_event(ev, trace));
   smartlist_free(tmp);
-}
-
-static void
-circpad_sim_print_combined_trace(smartlist_t *t1, smartlist_t *t2, int n)
-{
-  smartlist_t *t1_tmp = smartlist_new(), *t2_tmp = smartlist_new();
-  for (int i = 0; i < n; i++) {
-    circpad_sim_event *ev;
-    if (circpad_sim_peak_event(t1)->timestamp < circpad_sim_peak_event(t2)->timestamp) {
-      ev = circpad_sim_pop_event(t1);
-      log_debug(LD_CIRC, "%012"PRId64" c %s", ev->timestamp, ev->event);
-      smartlist_add(t1_tmp, ev);
-    } else {
-      ev = circpad_sim_pop_event(t2);
-      log_debug(LD_CIRC, "%012"PRId64" r %s", ev->timestamp, ev->event);
-      smartlist_add(t2_tmp, ev);
-    }
-  }
-  SMARTLIST_FOREACH(t1_tmp, 
-                    circpad_sim_event *, ev, circpad_sim_push_event(ev, t1));
-  SMARTLIST_FOREACH(t2_tmp, 
-                    circpad_sim_event *, ev, circpad_sim_push_event(ev, t2));
-  smartlist_free(t1_tmp);
-  smartlist_free(t2_tmp);
-}
-
-static void
-circpad_sim_results_trace_client(void)
-{
-  circpad_sim_event *event;
-  while (smartlist_len(out_client_trace)) {
-    event = circpad_sim_pop_event(out_client_trace);
-    log_info(LD_CIRC, "%012"PRId64" %s", event->timestamp, event->event);
-    circpad_sim_event_free(event);
-  }
-}
-
-static void
-circpad_sim_results_trace_relay(void)
-{
-  circpad_sim_event *event;
-  while (smartlist_len(out_relay_trace)) {
-    event = circpad_sim_pop_event(out_relay_trace);
-    log_info(LD_CIRC, "%012"PRId64" %s", event->timestamp, event->event);
-    circpad_sim_event_free(event);
-  }
 }
 
 void
@@ -287,16 +224,9 @@ test_circuitpadding_sim_main(void *arg)
 
   client_trace = smartlist_new();
   relay_trace = smartlist_new();
-  out_client_trace = smartlist_new();
-  out_relay_trace = smartlist_new();
 
   tt_assert(get_circpad_trace(circpad_sim_arg_client_trace, client_trace));
   tt_assert(get_circpad_trace(circpad_sim_arg_relay_trace, relay_trace));
-  int client_trace_start_len = smartlist_len(client_trace);
-  int relay_trace_start_len = smartlist_len(relay_trace);
-
-  // we hook all instrumented output of the framework to create our output
-  MOCK(circpad_trace_event, circpad_trace_event_mock);
 
   // start with the circuitpadding testing glue 
   MOCK(circuitmux_attach_circuit, circuitmux_attach_circuit_mock);
@@ -354,22 +284,6 @@ test_circuitpadding_sim_main(void *arg)
 
   circpad_sim_main_loop();
 
-  // FIXME: sanity check on resulting trace
-  
-  log_notice(LD_CIRC, "client input trace has %d events, output %d events", 
-    client_trace_start_len, smartlist_len(out_client_trace));
-  log_notice(LD_CIRC, "relay input trace has %d events, output %d events", 
-    relay_trace_start_len, smartlist_len(out_relay_trace));
-
-  if (get_min_log_level() == LOG_DEBUG) {
-    log_debug(LD_CIRC, "## out combined trace ##");
-    circpad_sim_print_combined_trace(out_client_trace, out_relay_trace, 20);
-  }
-
-  // print results
-  circpad_sim_results_trace_client();
-  circpad_sim_results_trace_relay();
-
   done:
     free_fake_origin_circuit(TO_ORIGIN_CIRCUIT(client_side));
     circuitmux_detach_all_circuits(dummy_channel.cmux, NULL);
@@ -385,14 +299,8 @@ test_circuitpadding_sim_main(void *arg)
                       circpad_sim_event *, ev, circpad_sim_event_free(ev));
     SMARTLIST_FOREACH(relay_trace, 
                       circpad_sim_event *, ev, circpad_sim_event_free(ev));
-    SMARTLIST_FOREACH(out_client_trace, 
-                      circpad_sim_event *, ev, circpad_sim_event_free(ev));
-    SMARTLIST_FOREACH(out_relay_trace, 
-                      circpad_sim_event *, ev, circpad_sim_event_free(ev));
     smartlist_free(client_trace);
     smartlist_free(relay_trace);
-    smartlist_free(out_client_trace);
-    smartlist_free(out_relay_trace);
 }
 
 static void
@@ -578,7 +486,7 @@ circpad_sim_continue(circpad_sim_event **next_event, circuit_t **next_side) {
 static void
 circpad_sim_main_loop(void)
 {
-  circpad_sim_event *next_event, *copied_event;
+  circpad_sim_event *next_event;
   circuit_t *next_side;
   cell_t *cell;
 
@@ -650,13 +558,9 @@ circpad_sim_main_loop(void)
         circpad_trace_event(next_event->event, client_side);
         break;
       case CIRCPAD_SIM_CELL_EVENT_UNKNOWN:
-        // we just add unknown events to the output in a copied event
-        copied_event = tor_memdup(next_event, sizeof(circpad_sim_event));
-        next_event->internal = NULL; // keeping for copy, not free below
-        if (next_side == client_side)
-          circpad_sim_push_event(copied_event, out_client_trace);
-        else
-          circpad_sim_push_event(copied_event, out_relay_trace);
+        // we just add unknown events to the output in a copied event,
+        // with new mocked timestamps
+        circpad_trace_event(next_event->event, next_side);
         break;
       default:
         tor_assertf(0, "unknown sim event type, this should never happen");
@@ -670,31 +574,6 @@ circpad_sim_main_loop(void)
 /*
 * Helpers for the simulation.
 */
-
-static void 
-circpad_trace_event_mock(const char *event, 
-                            const circuit_t *circ)
-{
-  circpad_sim_event *e = tor_malloc_zero(sizeof(circpad_sim_event));
-  tor_assert(find_circpad_sim_event((char*)event, e));
-
-  // relative timestamp in output
-  e->timestamp = curr_mocked_time - actual_mocked_monotime_start;
-  tor_assert(e->timestamp >= 0);
-
-  // XXX: Guard traces, formatting, smuggled circid, etc..
-  if (CIRCUIT_IS_ORIGIN(circ)) {
-    circpad_sim_push_event(e, out_client_trace);
-    log_debug(LD_CIRC, "%012"PRId64" c %s", e->timestamp, e->event);
-  } else {
-    circpad_sim_push_event(e, out_relay_trace);
-    log_debug(LD_CIRC, "%012"PRId64" r %s", e->timestamp, e->event);
-  }
-
-  // we always move the timer ahead by the least possible after each event
-  // to keep an accurate order for newly injected simulated events
-  timers_advance_and_run(1);
-}
 
 int 
 get_circpad_trace(const char* loc, smartlist_t* trace)
