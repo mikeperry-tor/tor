@@ -2854,6 +2854,8 @@ circpad_negotiate_padding(origin_circuit_t *circ,
   circpad_negotiate_set_version(&type, 0);
   circpad_negotiate_set_machine_type(&type, machine);
 
+  circpad_negotiate_set_client_circid(&type, circ->global_identifier);
+
   if ((len = circpad_negotiate_encode(cell.payload, CELL_PAYLOAD_SIZE,
         &type)) < 0)
     return -1;
