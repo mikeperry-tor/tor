@@ -50,6 +50,7 @@
 #define CIRCPAD_SIM_MACHINE_EVENT_HAS_NO_STREAMS_STR "circpad_machine_event_circ_has_no_streams"
 #define CIRCPAD_SIM_MACHINE_EVENT_PURPOSE_CHANGED_STR "circpad_machine_event_circ_purpose_changed"
 #define CIRCPAD_SIM_MACHINE_EVENT_HAS_NO_RELAY_EARLY_STR "circpad_machine_event_circ_has_no_relay_early"
+#define CIRCPAD_SIM_MACHINE_EVENT_AP_BEGIN_STR "connection_ap_handshake_send_begin"
 
 #define CIRCPAD_SIM_FORMAT_TIMESTAMP_LEN 16
 
@@ -73,7 +74,8 @@ typedef enum {
   CIRCPAD_SIM_MACHINE_EVENT_PURPOSE_CHANGED = 9,
   CIRCPAD_SIM_MACHINE_EVENT_HAS_NO_RELAY_EARLY = 10,
   CIRCPAD_SIM_INTERNAL_EVENT_NEGOTIATE = 11,
-  CIRCPAD_SIM_INTERNAL_EVENT_NEGOTIATED = 12
+  CIRCPAD_SIM_INTERNAL_EVENT_NEGOTIATED = 12,
+  CIRCPAD_SIM_MACHINE_EVENT_AP_BEGIN = 13
 } circpad_sim_event_t;
 
 typedef struct circpad_sim_event {
@@ -643,6 +645,10 @@ circpad_sim_main_loop(void)
         circpad_handle_padding_negotiated(client_side, next_event->internal,
                                 TO_ORIGIN_CIRCUIT(client_side)->cpath->next);
         break;
+      case CIRCPAD_SIM_MACHINE_EVENT_AP_BEGIN:
+        // for ap begin, just trace the event with new timestamps
+        circpad_trace_event(next_event->event, client_side);
+        break;
       case CIRCPAD_SIM_CELL_EVENT_UNKNOWN:
         // we just add unknown events to the output in a copied event
         copied_event = tor_memdup(next_event, sizeof(circpad_sim_event));
@@ -777,11 +783,18 @@ find_circpad_sim_event(char* line, circpad_sim_event *e)
   else if(strstr(line, CIRCPAD_SIM_MACHINE_EVENT_HAS_NO_RELAY_EARLY_STR)) {
     e->type = CIRCPAD_SIM_MACHINE_EVENT_HAS_NO_RELAY_EARLY;
     e->event = CIRCPAD_SIM_MACHINE_EVENT_HAS_NO_RELAY_EARLY_STR;
+  }
+  else if (strstr(line, CIRCPAD_SIM_MACHINE_EVENT_AP_BEGIN_STR)) {
+    e->type = CIRCPAD_SIM_MACHINE_EVENT_AP_BEGIN;
+    e->event = tor_strdup((char*)(line+CIRCPAD_SIM_FORMAT_TIMESTAMP_LEN+1));
   } else {
-    // probably an unknown event, allocate a raw copy to carry it into output
+    log_warn(LD_BUG,
+             "Unknown event line %s! Please add support for this to simulator!",
+             line);
     e->type = CIRCPAD_SIM_CELL_EVENT_UNKNOWN;
     e->event = tor_strdup((char*)(line+CIRCPAD_SIM_FORMAT_TIMESTAMP_LEN+1));
     e->internal = (char*)e->event;
+    return 0;
   }
 
   return 1;  
