@@ -27,6 +27,16 @@ struct circpad_negotiate {
   // FIXME-MP-AP: Maybe we just say to transition to the first state
   // here instead.. Also what about delay before responding?
   u8 echo_request IN [0,1];
+
+  /* This is only sent research machines. For non-research machines,
+   * it is 0 (because we zero all unused fields).
+   *
+   * NOTE: This means setting this to non-zero tells relays to emit
+   * high-resolution timinig logs for your circuit! Do not use this
+   * unless you are acting as both the client *and* the relay in an
+   * experimental context!
+   */
+  u32 client_circid;
 };
 
 /**
