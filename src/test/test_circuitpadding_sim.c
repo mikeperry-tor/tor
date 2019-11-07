@@ -181,6 +181,9 @@ MOCK_IMPL(STATIC void, helper_add_relay_machine, (void))
 * Core simulation function
 */
 
+/* Strings that contain the test traces */
+const char *circpad_sim_arg_client_trace, *circpad_sim_arg_relay_trace;
+
 // testing-related variables to make the mocking of the rest of tor work
 static channel_t dummy_channel;
 static circuit_t *client_side;
