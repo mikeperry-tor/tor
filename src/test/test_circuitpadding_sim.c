@@ -139,8 +139,8 @@ static int circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
 // The circuidpadding framework is patched for the simulator to generate events
 // to the torlog as input to the simulator. Here we re-use the same function to
 // collect the output of the simulator into two queues. 
-static void circpad_event_callback_mock(const char *event, 
-                                        uint32_t circuit_identifier);
+static void circpad_trace_event_mock(const char *event, 
+                                     const circuit_t *circ);
 // Once we've collected the output, the end of the simulation calls two
 // functions to output the client and relay traces using Tor's logging
 // framework. The framework prefixes each line with the function it's called
@@ -291,7 +291,7 @@ test_circuitpadding_sim_main(void *arg)
   int relay_trace_start_len = smartlist_len(relay_trace);
 
   // we hook all instrumented output of the framework to create our output
-  MOCK(circpad_event_callback, circpad_event_callback_mock);
+  MOCK(circpad_trace_event, circpad_trace_event_mock);
 
   // start with the circuitpadding testing glue 
   MOCK(circuitmux_attach_circuit, circuitmux_attach_circuit_mock);
@@ -663,8 +663,8 @@ circpad_sim_main_loop(void)
 */
 
 static void 
-circpad_event_callback_mock(const char *event, 
-                            uint32_t circuit_identifier)
+circpad_trace_event_mock(const char *event, 
+                            const circuit_t *circ)
 {
   circpad_sim_event *e = tor_malloc_zero(sizeof(circpad_sim_event));
   tor_assert(find_circpad_sim_event((char*)event, e));
@@ -673,8 +673,8 @@ circpad_event_callback_mock(const char *event,
   e->timestamp = curr_mocked_time - actual_mocked_monotime_start;
   tor_assert(e->timestamp >= 0);
 
-  // relay-side has identifier 0, clients > 0
-  if (circuit_identifier) {
+  // XXX: Guard traces, formatting, smuggled circid, etc..
+  if (CIRCUIT_IS_ORIGIN(circ)) {
     circpad_sim_push_event(e, out_client_trace);
     log_debug(LD_CIRC, "%012"PRId64" c %s", e->timestamp, e->event);
   } else {
