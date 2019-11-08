@@ -127,6 +127,8 @@ static void helper_add_relay_machine_mock(void);
 // testing framework. It contains of two parts.
 void test_circuitpadding_sim_main(void *arg);
 
+static int64_t circpad_sim_get_earliest_trace_time(void);
+
 // The first part is for estimating and later sampling the latency between the
 // client and relay running the padding machines. We need to estimate this
 // latency based on the input traces, because the simulator will inject new
@@ -242,6 +244,11 @@ test_circuitpadding_sim_main(void *arg)
 
   tt_assert(get_circpad_trace(circpad_sim_arg_client_trace, client_trace));
   tt_assert(get_circpad_trace(circpad_sim_arg_relay_trace, relay_trace));
+
+  if (circpad_sim_get_earliest_trace_time() != 0) {
+    log_err(LD_BUG, "Trace strings must be normalized to start at 0!");
+    goto done;
+  }
 
   // start with the circuitpadding testing glue
   MOCK(circuitmux_attach_circuit, circuitmux_attach_circuit_mock);
@@ -474,9 +481,9 @@ circpad_sim_continue(circpad_sim_event **next_event, circuit_t **next_side)
   // Is trace time normalized?
   // XXX: This either-or side thing is concerning..
   while (circpad_sim_any_machine_has_padding_scheduled() &&
-        (actual_mocked_monotime_start + circpad_sim_get_earliest_trace_time() -
-          curr_mocked_time) > SIM_TICK_TIME) {
-          timers_advance_and_run(SIM_TICK_TIME);
+        (circpad_sim_get_earliest_trace_time() +
+          actual_mocked_monotime_start - curr_mocked_time) > SIM_TICK_TIME) {
+    timers_advance_and_run(SIM_TICK_TIME);
   }
 
   if (smartlist_len(client_trace) > 0 && smartlist_len(relay_trace) > 0) {
@@ -603,6 +610,8 @@ int
 get_circpad_trace(const char* loc, smartlist_t* trace)
 {
   char *line, *circpad_sim_trace_buffer, *circpad_sim_trace_read_rest;
+  int64_t first_timestamp = -1;
+
   if (circpad_sim_arg_client_trace && circpad_sim_arg_relay_trace) {
     circpad_sim_trace_buffer = read_file_to_str(loc, 0, NULL);
   } else {
@@ -624,9 +633,13 @@ get_circpad_trace(const char* loc, smartlist_t* trace)
     circpad_sim_event e;
     if (find_circpad_sim_event(line, &e)) {
       circpad_sim_event *event = tor_malloc_zero(sizeof(circpad_sim_event));
+      /* We must normalize each side's timestamps to start at 0 */
+      if (first_timestamp == -1) {
+        first_timestamp = e.timestamp;
+      }
       event->type = e.type;
       event->event = e.event;
-      event->timestamp = e.timestamp;
+      event->timestamp = e.timestamp - first_timestamp;
       circpad_sim_push_event(event, trace);
     }
   }
