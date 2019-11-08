@@ -1,0 +1,33 @@
+Code issues:
+ - file libevent timer resolution bug, link it in doc
+ - file timer flag bug
+ - File + fix RIT bug
+ - Link RIT machines in doc
+ - Document intiuition behind state machines. Mention ANY_BIN_EMPTY event,
+   others
+ - Link to simulator docs; update sections saying it needs to be implemented
+ - asn's analysis + bug filing
+ - Triage other bugs
+
+sim issues:
+ - If this branch is used with a middle node that does *not* run the branch
+   or support logging, then there is an extra error response cell from the
+   relay
+   - Document this, or filter it out? Hrmm...
+   - We could add logic to the C side to not negotiate logging if
+     MiddleNodes torrc option is not set...
+ - extractor must specify circid (or ids?)
+   - Document that simulator can use only one circ at a time
+   - To study multiplexing effects, must split and merge after
+     - Script for this?
+ - negotiate event logging + simulator handling
+   - Simulator no longer needs an option to strip negotiate cells!
+     - regular machine negotiate events are gone
+     - Always strip circpad_negotiate_logging events; see commit message
+ - Warn about trusting time in simulator docs/output
+   - Cite libevent bug/circpad doc section from above TODO, when its done
+ - Add in extra synthetic non-padding cell on relay side, before
+   circpad_negotiate_logging event?
+   - This is to record the onionskin the relay got to start its circuit view..
+   - Use the calculated RTT delta for this? Should be one full RTT before
+     circpad_negotiate_logging
