@@ -1,0 +1,19 @@
+Code issues:
+ - file libevent timer resolution bug, link it in doc
+ - file timer flag bug
+ - File + fix RIT bug
+ - Link RIT machines in doc
+ - Document intiuition behind state machines. Mention ANY_BIN_EMPTY event,
+   others
+ - Link to simulator docs; update sections saying it needs to be implemented
+ - asn's analysis + bug filing
+ - Triage other bugs
+
+sim issues:
+ - extractor must specify circid (or ids?)
+ - negotiate event logging + simulator handling
+   - Simulator needs an option to strip negotiate cells :/
+     - Should always strip negotiate events
+   - Need torrc option to enable/disable logging machine
+     - Logging machine may cause machine id mismatches :/
+   - Remove custom event codepaths for negotiate in simulator
