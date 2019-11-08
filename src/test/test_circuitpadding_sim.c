@@ -428,6 +428,7 @@ circpad_sim_push_event(circpad_sim_event *event, smartlist_t *trace)
 static int
 circpad_sim_any_machine_has_padding_scheduled(void)
 {
+  // XXX: Hrmm we were thinking of deprecating this field
   if (client_side->padding_info[0])
     if (client_side->padding_info[0]->is_padding_timer_scheduled)
       return 1;
@@ -469,6 +470,9 @@ circpad_sim_continue(circpad_sim_event **next_event, circuit_t **next_side)
   // the SIM_TICK_TIME is significantly faster then Tor's internal timers
   int64_t SIM_TICK_TIME = TOR_NSEC_PER_USEC*50; // USEC_PER_TICK is 100
 
+  // XXX: The use of mocked monotime start is concerning when comparing to trace time..
+  // Is trace time normalized?
+  // XXX: This either-or side thing is concerning..
   while (circpad_sim_any_machine_has_padding_scheduled() &&
         (actual_mocked_monotime_start + circpad_sim_get_earliest_trace_time() -
           curr_mocked_time) > SIM_TICK_TIME) {
@@ -717,6 +721,8 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
   memcpy(e->internal, cell, sizeof(cell_t));
 
   if (circ == client_side) {
+    // XXX: This is problematic.. We need to also emit a trace log
+    // for this.. Which doesn't always happen...
     if (cell->payload[0] == RELAY_COMMAND_PADDING_NEGOTIATE) {
       // the client wants to negotiate a padding machine
       e->type = CIRCPAD_SIM_INTERNAL_EVENT_NEGOTIATE;
