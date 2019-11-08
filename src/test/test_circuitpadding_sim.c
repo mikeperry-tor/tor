@@ -207,6 +207,10 @@ static int64_t sim_latency_mean;
 #define MONOTIME_MOCK_START (monotime_absolute_nsec()+\
                                TOR_NSEC_PER_USEC*TOR_USEC_PER_SEC)
 
+/* Evaluates to the current nsecs since the simulation started */
+#define MONOTIME_RUN_DELTA \
+    (curr_mocked_time-actual_mocked_monotime_start)
+
 // the core working queues of traces, input and output
 static smartlist_t *client_trace = NULL;
 static smartlist_t *relay_trace = NULL;
@@ -435,7 +439,8 @@ circpad_sim_push_event(circpad_sim_event *event, smartlist_t *trace)
 static int
 circpad_sim_any_machine_has_padding_scheduled(void)
 {
-  // XXX: Hrmm we were thinking of deprecating this field
+  // FIXME: we were thinking of deprecating this field in
+  // favor of making a timer call to check this
   if (client_side->padding_info[0])
     if (client_side->padding_info[0]->is_padding_timer_scheduled)
       return 1;
@@ -477,12 +482,9 @@ circpad_sim_continue(circpad_sim_event **next_event, circuit_t **next_side)
   // the SIM_TICK_TIME is significantly faster then Tor's internal timers
   int64_t SIM_TICK_TIME = TOR_NSEC_PER_USEC*50; // USEC_PER_TICK is 100
 
-  // XXX: The use of mocked monotime start is concerning when comparing to trace time..
-  // Is trace time normalized?
-  // XXX: This either-or side thing is concerning..
   while (circpad_sim_any_machine_has_padding_scheduled() &&
-        (circpad_sim_get_earliest_trace_time() +
-          actual_mocked_monotime_start - curr_mocked_time) > SIM_TICK_TIME) {
+        (circpad_sim_get_earliest_trace_time() - MONOTIME_RUN_DELTA)
+           > SIM_TICK_TIME) {
     timers_advance_and_run(SIM_TICK_TIME);
   }
 
@@ -528,8 +530,10 @@ circpad_sim_main_loop(void)
   //   bit messy, for machine* events, we need to make changes that'll make
   //   circpad_circuit_state() report the state change.
   while (circpad_sim_continue(&next_event, &next_side)) {
-    timers_advance_and_run(actual_mocked_monotime_start +
-                           next_event->timestamp - curr_mocked_time);
+    // XXX: This can move our monotime backwards if we've moved past it
+    // in circpad_sim_continue(). I don't *think* this is a problem, but
+    // it could be.
+    timers_advance_and_run(next_event->timestamp - MONOTIME_RUN_DELTA);
 
     switch (next_event->type) {
       case CIRCPAD_SIM_MACHINE_EVENT_CIRC_BUILT:
@@ -752,11 +756,10 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
     // schedule event at relay with the sampled latency in the future, note
     // that timestamps are relative to the starting time, so we need to
     // substract the starting time
-    e->timestamp = (curr_mocked_time-actual_mocked_monotime_start) +
-                   circpad_sim_sample_latency();
+    e->timestamp = (MONOTIME_RUN_DELTA) + circpad_sim_sample_latency();
     circpad_sim_push_event(e, relay_trace);
     log_debug(LD_CIRC, "%012"PRId64" mock relay %s to relay_trace at %"PRId64,
-      curr_mocked_time-actual_mocked_monotime_start, e->event, e->timestamp);
+      MONOTIME_RUN_DELTA, e->event, e->timestamp);
   } else if (circ == relay_side) {
     tt_int_op(cell_direction, OP_EQ, CELL_DIRECTION_IN);
     if (cell->payload[0] == RELAY_COMMAND_PADDING_NEGOTIATED) {
@@ -771,11 +774,10 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
     // schedule event at client at some point in the future, note that
     // timestamps are relative to the starting time, so we need to
     // substract the starting time
-    e->timestamp = (curr_mocked_time-actual_mocked_monotime_start) +
-                   circpad_sim_sample_latency();
+    e->timestamp = (MONOTIME_RUN_DELTA) + circpad_sim_sample_latency();
     circpad_sim_push_event(e, client_trace);
     log_debug(LD_CIRC, "%012"PRId64" mock relay %s to client_trace at %"PRId64,
-      curr_mocked_time-actual_mocked_monotime_start, e->event, e->timestamp);
+      MONOTIME_RUN_DELTA, e->event, e->timestamp);
   }
 
  done:
