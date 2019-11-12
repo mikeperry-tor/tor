@@ -188,6 +188,9 @@ MOCK_IMPL(STATIC void, helper_add_relay_machine, (void))
 /* Strings that contain the test traces */
 const char *circpad_sim_arg_client_trace, *circpad_sim_arg_relay_trace;
 
+/* Store the client circid for output log correctness */
+uint32_t circpad_sim_client_circid;
+
 // testing-related variables to make the mocking of the rest of tor work
 static channel_t dummy_channel;
 static circuit_t *client_side;
@@ -283,6 +286,15 @@ test_circuitpadding_sim_main(void *arg)
   helper_add_client_machine();
   helper_add_relay_machine();
   set_network_participation(1);
+
+  /* If a custom circid was specified, use it */
+  if (circpad_sim_client_circid) {
+    TO_ORIGIN_CIRCUIT(client_side)->global_identifier = circpad_sim_client_circid;
+  }
+
+  /* If we have no machines, we still want circids */
+  relay_side->padding_circid =
+      TO_ORIGIN_CIRCUIT(client_side)->global_identifier;
 
   /*
   * All Gluing done. The simulation works in two steps:
