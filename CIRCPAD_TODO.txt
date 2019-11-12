@@ -11,9 +11,11 @@ Code issues:
 
 sim issues:
  - extractor must specify circid (or ids?)
+   - Document that simulator can use only one circ at a time; must split+merge after
  - negotiate event logging + simulator handling
-   - Simulator needs an option to strip negotiate cells :/
-     - Should always strip negotiate events
    - Need torrc option to enable/disable logging machine
      - Logging machine may cause machine id mismatches :/
    - Remove custom event codepaths for negotiate in simulator
+   - Shutdown logging machine immediately so it doesn't occupy a slot
+   - Simulator needs an option to strip negotiate cells :/
+     - Should always strip negotiate events
