@@ -55,38 +55,6 @@
 #include "core/or/circuitpadding_machines.h"
 #include "core/or/circuitpadding.h"
 
-/**
- * This machine does nothing but ensure that traces are logged.
- *
- * Note that using it means that you must use the log conversion's
- * option to filter out these extra negotiat cells.
- */
-circpad_machine_spec_t *
-circpad_machine_dummy_log_tracer(void)
-{
-  circpad_machine_spec_t *log_machine
-      = tor_malloc_zero(sizeof(circpad_machine_spec_t));
-
-  log_machine->name = "log_tracer";
-
-  log_machine->conditions.state_mask = CIRCPAD_STATE_ALL;
-  log_machine->target_hopnum = 2;
-  log_machine->conditions.purpose_mask = CIRCPAD_PURPOSE_ALL;
-
-  /* One statee: START (and END) */
-  circpad_machine_states_init(log_machine, 1);
-
-  /* Use index 1, so we can stay around if other machines get activatd
-   *
-   * (XXX: This may cause problems if people need two machines :/)
-   */
-  log_machine->machine_index = 1;
-
-  /* No transitions. We stay in start forever */
-
-  return log_machine;
-}
-
 /** Create a client-side padding machine that aims to hide IP circuits. In
  *  particular, it keeps intro circuits alive until a bunch of fake traffic has
  *  been pushed through.

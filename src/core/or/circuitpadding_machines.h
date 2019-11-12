@@ -14,9 +14,6 @@ void circpad_machine_client_hide_intro_circuits(smartlist_t *machines_sl);
 void circpad_machine_relay_hide_rend_circuits(smartlist_t *machines_sl);
 void circpad_machine_client_hide_rend_circuits(smartlist_t *machines_sl);
 
-struct circpad_machine_spec_t;
-struct circpad_machine_spec_t *circpad_machine_dummy_log_tracer(void);
-
 #ifdef CIRCUITPADDING_MACHINES_PRIVATE
 
 /** State of the padding machines that actually sends padding */

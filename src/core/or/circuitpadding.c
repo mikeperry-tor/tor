@@ -2736,18 +2736,6 @@ circpad_machines_init(void)
   origin_padding_machines = smartlist_new();
   relay_padding_machines = smartlist_new();
 
-  /* Register log machine first, so it takes low precidence in case
-   * there are other 2nd-slot machines */
-  /* Client side */
-  circpad_machine_spec_t *logger = circpad_machine_dummy_log_tracer();
-  logger->is_origin_side = 1;
-  logger->machine_num = smartlist_len(origin_padding_machines);
-  circpad_register_padding_machine(logger, origin_padding_machines);
-  /* Relay side */
-  logger = circpad_machine_dummy_log_tracer();
-  logger->machine_num = smartlist_len(relay_padding_machines);
-  circpad_register_padding_machine(logger, relay_padding_machines);
-
   /* Register machines for hiding client-side intro circuits */
   circpad_machine_client_hide_intro_circuits(origin_padding_machines);
   circpad_machine_relay_hide_intro_circuits(relay_padding_machines);
