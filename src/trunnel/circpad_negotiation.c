@@ -34,7 +34,7 @@ circpad_negotiate_new(void)
   circpad_negotiate_t *val = trunnel_calloc(1, sizeof(circpad_negotiate_t));
   if (NULL == val)
     return NULL;
-  val->command = CIRCPAD_COMMAND_START;
+  val->command = CIRCPAD_COMMAND_LOG;
   return val;
 }
 
@@ -79,7 +79,7 @@ circpad_negotiate_get_command(const circpad_negotiate_t *inp)
 int
 circpad_negotiate_set_command(circpad_negotiate_t *inp, uint8_t val)
 {
-  if (! ((val == CIRCPAD_COMMAND_START || val == CIRCPAD_COMMAND_STOP))) {
+  if (! ((val == CIRCPAD_COMMAND_LOG || val == CIRCPAD_COMMAND_START || val == CIRCPAD_COMMAND_STOP))) {
      TRUNNEL_SET_ERROR_CODE(inp);
      return -1;
   }
@@ -132,7 +132,7 @@ circpad_negotiate_check(const circpad_negotiate_t *obj)
     return "A set function failed on this object";
   if (! (obj->version == 0))
     return "Integer out of bounds";
-  if (! (obj->command == CIRCPAD_COMMAND_START || obj->command == CIRCPAD_COMMAND_STOP))
+  if (! (obj->command == CIRCPAD_COMMAND_LOG || obj->command == CIRCPAD_COMMAND_START || obj->command == CIRCPAD_COMMAND_STOP))
     return "Integer out of bounds";
   if (! (obj->echo_request == 0 || obj->echo_request == 1))
     return "Integer out of bounds";
@@ -151,7 +151,7 @@ circpad_negotiate_encoded_len(const circpad_negotiate_t *obj)
   /* Length of u8 version IN [0] */
   result += 1;
 
-  /* Length of u8 command IN [CIRCPAD_COMMAND_START, CIRCPAD_COMMAND_STOP] */
+  /* Length of u8 command IN [CIRCPAD_COMMAND_LOG, CIRCPAD_COMMAND_START, CIRCPAD_COMMAND_STOP] */
   result += 1;
 
   /* Length of u8 machine_type */
@@ -196,7 +196,7 @@ circpad_negotiate_encode(uint8_t *output, const size_t avail, const circpad_nego
   trunnel_set_uint8(ptr, (obj->version));
   written += 1; ptr += 1;
 
-  /* Encode u8 command IN [CIRCPAD_COMMAND_START, CIRCPAD_COMMAND_STOP] */
+  /* Encode u8 command IN [CIRCPAD_COMMAND_LOG, CIRCPAD_COMMAND_START, CIRCPAD_COMMAND_STOP] */
   trunnel_assert(written <= avail);
   if (avail - written < 1)
     goto truncated;
@@ -266,11 +266,11 @@ circpad_negotiate_parse_into(circpad_negotiate_t *obj, const uint8_t *input, con
   if (! (obj->version == 0))
     goto fail;
 
-  /* Parse u8 command IN [CIRCPAD_COMMAND_START, CIRCPAD_COMMAND_STOP] */
+  /* Parse u8 command IN [CIRCPAD_COMMAND_LOG, CIRCPAD_COMMAND_START, CIRCPAD_COMMAND_STOP] */
   CHECK_REMAINING(1, truncated);
   obj->command = (trunnel_get_uint8(ptr));
   remaining -= 1; ptr += 1;
-  if (! (obj->command == CIRCPAD_COMMAND_START || obj->command == CIRCPAD_COMMAND_STOP))
+  if (! (obj->command == CIRCPAD_COMMAND_LOG || obj->command == CIRCPAD_COMMAND_START || obj->command == CIRCPAD_COMMAND_STOP))
     goto fail;
 
   /* Parse u8 machine_type */
