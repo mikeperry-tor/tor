@@ -2248,7 +2248,11 @@ circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ)
 {
   circpad_trace_event(__func__, TO_CIRCUIT(on_circ));
 
-  circpad_negotiate_logging(on_circ);
+  /* Only try to negotiate logging if the middle nodes are pinned
+   * to researcher-controlled relays */
+  if (get_options()->MiddleNodes) {
+    circpad_negotiate_logging(on_circ);
+  }
 
   /* Since our padding conditions do not specify a max_hops,
    * all we can do is add machines here */
