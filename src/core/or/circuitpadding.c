@@ -2908,8 +2908,6 @@ circpad_negotiate_padding(origin_circuit_t *circ,
          "Negotiating padding on circuit %u (%d), command %d",
          circ->global_identifier, TO_CIRCUIT(circ)->purpose, command);
 
-  circpad_trace_event(__func__, TO_CIRCUIT(circ));
-
   return circpad_send_command_to_hop(circ, target_hopnum,
                                      RELAY_COMMAND_PADDING_NEGOTIATE,
                                      cell.payload, len);
@@ -2945,8 +2943,6 @@ circpad_padding_negotiated(circuit_t *circ,
   if ((len = circpad_negotiated_encode(cell.payload, CELL_PAYLOAD_SIZE,
         &type)) < 0)
     return 0;
-
-  circpad_trace_event(__func__, circ);
 
   /* Use relay_send because we're from the middle to the origin. We don't
    * need to specify a target hop or layer_hint. */
@@ -3027,8 +3023,6 @@ circpad_handle_padding_negotiate(circuit_t *circ, cell_t *cell)
     retval = -1;
 
   done:
-    circpad_trace_event(__func__, circ);
-
     circpad_padding_negotiated(circ, negotiate->machine_type,
                    negotiate->command,
                    (retval == 0) ? CIRCPAD_RESPONSE_OK : CIRCPAD_RESPONSE_ERR);
@@ -3072,8 +3066,6 @@ circpad_handle_padding_negotiated(circuit_t *circ, cell_t *cell,
           "dropping.", TO_ORIGIN_CIRCUIT(circ)->global_identifier);
     return -1;
   }
-
-  circpad_trace_event(__func__, circ);
 
   if (negotiated->command == CIRCPAD_COMMAND_STOP) {
     log_info(LD_CIRC,
