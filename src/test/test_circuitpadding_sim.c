@@ -543,9 +543,6 @@ circpad_sim_main_loop(void)
   //   bit messy, for machine* events, we need to make changes that'll make
   //   circpad_circuit_state() report the state change.
   while (circpad_sim_continue(&next_event, &next_side)) {
-    // XXX: This can move our monotime backwards if we've moved past it
-    // in circpad_sim_continue(). I don't *think* this is a problem, but
-    // it could be.
     timers_advance_and_run(next_event->timestamp - MONOTIME_RUN_DELTA);
 
     switch (next_event->type) {
@@ -593,10 +590,14 @@ circpad_sim_main_loop(void)
         circpad_cell_event_nonpadding_received(next_side);
         break;
       case CIRCPAD_SIM_INTERNAL_EVENT_NEGOTIATE:
+        // need to manually tell circpad we got a nonpadding cell,
+        // so it logs it.
+        circpad_cell_event_nonpadding_received(next_side);
         circpad_handle_padding_negotiate(relay_side, next_event->internal);
         break;
       case CIRCPAD_SIM_INTERNAL_EVENT_NEGOTIATED:
-        // need to manually tell circpad we got a nonpadding cell
+        // need to manually tell circpad we got a nonpadding cell, so it
+        // logs it.
         circpad_cell_event_nonpadding_received(client_side);
         circpad_handle_padding_negotiated(client_side, next_event->internal,
                                 TO_ORIGIN_CIRCUIT(client_side)->cpath->next);
@@ -751,8 +752,6 @@ circuit_package_relay_cell_mock(cell_t *cell, circuit_t *circ,
   memcpy(e->internal, cell, sizeof(cell_t));
 
   if (circ == client_side) {
-    // XXX: This is problematic.. We need to also emit a trace log
-    // for this.. Which doesn't always happen...
     if (cell->payload[0] == RELAY_COMMAND_PADDING_NEGOTIATE) {
       // the client wants to negotiate a padding machine
       e->type = CIRCPAD_SIM_INTERNAL_EVENT_NEGOTIATE;
