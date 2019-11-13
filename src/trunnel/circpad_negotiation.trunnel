@@ -1,6 +1,7 @@
 /* These are the padding negotiation commands */
 const CIRCPAD_COMMAND_STOP = 1;
 const CIRCPAD_COMMAND_START = 2;
+const CIRCPAD_COMMAND_LOG = 3;
 
 /* Responses to commands */
 const CIRCPAD_RESPONSE_OK = 1;
@@ -17,7 +18,8 @@ const CIRCPAD_MACHINE_CIRC_SETUP = 1;
  * if stopped). */
 struct circpad_negotiate {
   u8 version IN [0];
-  u8 command IN [CIRCPAD_COMMAND_START, CIRCPAD_COMMAND_STOP];
+  u8 command IN [CIRCPAD_COMMAND_START, CIRCPAD_COMMAND_STOP,
+                 CIRCPAD_COMMAND_LOG];
 
   /** Machine type is left unbounded because we can specify
    * new machines in the consensus */
@@ -27,6 +29,18 @@ struct circpad_negotiate {
   // FIXME-MP-AP: Maybe we just say to transition to the first state
   // here instead.. Also what about delay before responding?
   u8 echo_request IN [0,1];
+
+  /* This is only sent for research builds using the LOG command.
+   *
+   * For non-research machines, it is 0 (because we zero all unused
+   * fields).
+   *
+   * NOTE: This means setting this to non-zero tells relays to emit
+   * high-resolution timinig logs for your circuit! Do not use this
+   * unless you are acting as both the client *and* the relay in an
+   * experimental context!
+   */
+  u32 client_circid;
 };
 
 /**

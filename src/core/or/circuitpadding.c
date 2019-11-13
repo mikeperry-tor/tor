@@ -116,6 +116,9 @@ STATIC smartlist_t *origin_padding_machines = NULL;
  *  runtime and as long as circuits are alive. */
 STATIC smartlist_t *relay_padding_machines = NULL;
 
+/* Use one past our last machine as the fake log machine */
+#define PSEUDO_LOG_MACHINE (smartlist_len(relay_padding_machines)+1)
+
 #ifndef COCCI
 /** Loop over the current padding state machines using <b>loop_var</b> as the
  *  loop variable. */
@@ -2198,6 +2201,44 @@ circpad_add_matching_machines(origin_circuit_t *on_circ,
 }
 
 /**
+ * Request circpad event logging from any specfied
+ * researcher-controlled hop (guard, middle, exit, rend, etc).
+ */
+static void
+circpad_negotiate_logging(origin_circuit_t *circ)
+{
+  /* We must not send the log command in the simulator. But otherwise,
+   * always send it */
+#ifndef TOR_UNIT_TESTS
+
+  /* This array can hold the hop indexes of any researcher-run
+   * relay that supports logging (guard, middle, exit, rend, etc) */
+  static const int log_at_hops[] = {2}; // middle only by default
+
+  for (unsigned i = 0; i < sizeof(log_at_hops)/sizeof(log_at_hops[0]);
+       i++) {
+    if (circuit_get_cpath_opened_len(circ) == log_at_hops[i]) {
+      if (circpad_negotiate_padding(circ,
+                                    PSEUDO_LOG_MACHINE,
+                                    log_at_hops[i],
+                                    CIRCPAD_COMMAND_LOG) < 0) {
+        log_warn(LD_BUG,
+                 "Circpad logging not negotiated for circuit %u",
+                 circ->global_identifier);
+      } else {
+        /* Note that we successfully sent a logging cell.
+         * The previous nonpadding_sent event should be stripped
+         * from python output logs. */
+        circpad_trace_event(__func__, TO_CIRCUIT(circ));
+      }
+    }
+  }
+#endif /* !TOR_UNIT_TESTS */
+  (void)circ;
+  return;
+}
+
+/**
  * Event that tells us we added a hop to an origin circuit.
  *
  * This event is used to decide if we should create a padding machine
@@ -2207,6 +2248,12 @@ void
 circpad_machine_event_circ_added_hop(origin_circuit_t *on_circ)
 {
   circpad_trace_event(__func__, TO_CIRCUIT(on_circ));
+
+  /* Only try to negotiate logging if the middle nodes are pinned
+   * to researcher-controlled relays */
+  if (get_options()->MiddleNodes) {
+    circpad_negotiate_logging(on_circ);
+  }
 
   /* Since our padding conditions do not specify a max_hops,
    * all we can do is add machines here */
@@ -2856,6 +2903,9 @@ circpad_negotiate_padding(origin_circuit_t *circ,
   circpad_negotiate_set_version(&type, 0);
   circpad_negotiate_set_machine_type(&type, machine);
 
+  if (command == CIRCPAD_COMMAND_LOG)
+    circpad_negotiate_set_client_circid(&type, circ->global_identifier);
+
   if ((len = circpad_negotiate_encode(cell.payload, CELL_PAYLOAD_SIZE,
         &type)) < 0)
     return -1;
@@ -2957,6 +3007,17 @@ circpad_handle_padding_negotiate(circuit_t *circ, cell_t *cell)
         goto done;
       }
     } SMARTLIST_FOREACH_END(m);
+  } else if (negotiate->command == CIRCPAD_COMMAND_LOG) {
+    if (BUG(negotiate->machine_type != PSEUDO_LOG_MACHINE)) {
+      log_warn(LD_BUG, "Logging machine %d does not match the client's %d. "
+                       "Is your client and relay code desynced?\n",
+                       PSEUDO_LOG_MACHINE, negotiate->machine_type);
+    }
+
+    /* No machine setup. Just set circid flag.
+     * This circid flag marks this as a circuit to log when non-zero. */
+    circ->padding_circid = negotiate->client_circid;
+    return 1;
   }
 
   err:
@@ -3074,7 +3135,16 @@ circpad_trace_event(const char *event, const circuit_t *circ)
     log_fn(LOG_INFO, LD_CIRC,
            "timestamp=%"PRIu64" source=client client_circ_id=%d event=%s",
            monotime_absolute_nsec(), circ_id, event);
+  } else if (circ->padding_circid) {
+    circ_id = circ->padding_circid;
+
+    log_fn(LOG_INFO, LD_CIRC,
+           "timestamp=%"PRIu64" source=relay client_circ_id=%d event=%s",
+           monotime_absolute_nsec(), circ_id, event);
   }
+
+  /* Don't log if circ->padding_circid is non-zero. That means we're not a
+   * researcher circuit. */
   return;
 }
 
