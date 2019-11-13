@@ -748,6 +748,8 @@ circpad_machine_spec_transition, (circpad_machine_runtime_t *mi,
 circpad_decision_t circpad_send_padding_cell_for_callback(
                                  circpad_machine_runtime_t *mi);
 
+void circpad_trace_event(const char *event, const circuit_t *circ);
+
 void circpad_free_all(void);
 
 #ifdef CIRCUITPADDING_PRIVATE
