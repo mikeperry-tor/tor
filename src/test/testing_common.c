@@ -28,6 +28,7 @@
 #include "lib/crypt_ops/crypto_init.h"
 #include "lib/version/torversion.h"
 #include "app/main/subsysmgr.h"
+#include "test/circuitpadding_sim_arg.h"
 
 #include <stdio.h>
 #ifdef HAVE_FCNTL_H

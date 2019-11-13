@@ -194,6 +194,7 @@ extern struct testcase_t cell_queue_tests[];
 extern struct testcase_t channel_tests[];
 extern struct testcase_t channelpadding_tests[];
 extern struct testcase_t circuitpadding_tests[];
+extern struct testcase_t circuitpadding_sim_tests[];
 extern struct testcase_t channeltls_tests[];
 extern struct testcase_t checkdir_tests[];
 extern struct testcase_t circuitbuild_tests[];
