@@ -289,7 +289,8 @@ test_circuitpadding_sim_main(void *arg)
 
   /* If a custom circid was specified, use it */
   if (circpad_sim_client_circid) {
-    TO_ORIGIN_CIRCUIT(client_side)->global_identifier = circpad_sim_client_circid;
+    TO_ORIGIN_CIRCUIT(client_side)->global_identifier =
+        circpad_sim_client_circid;
   }
 
   /* If we have no machines, we still want circids */
