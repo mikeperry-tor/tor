@@ -237,6 +237,15 @@ struct circuit_t {
    *  Each element of this array corresponds to a different padding machine,
    *  and we can have up to CIRCPAD_MAX_MACHINES such machines. */
   struct circpad_machine_runtime_t *padding_info[CIRCPAD_MAX_MACHINES];
+
+  /**
+   * For relay-side researcher machines, this field is filled in with the
+   * origin circuit's client-side global identifier.
+   *
+   * When it is non-zero on the relay side, we log all circpad events
+   * at info level.
+   */
+  uint32_t padding_circid;
 };
 
 #endif /* !defined(CIRCUIT_ST_H) */
