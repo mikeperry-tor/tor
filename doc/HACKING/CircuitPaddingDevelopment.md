@@ -995,8 +995,12 @@ should be an accurate reflection of when they are actually sent on the wire.
 
 To make matters worse, Tor's current timers are not as precise as some
 padding designs would require.  Even if we solve the queuing issues, we
-will still have issues of timing precision to solve. XXX: document the
-situation after solving [ticket 31653](https://bugs.torproject.org/31653)
+will still have issues of timing precision to solve. There are two bugs to
+track these problems. [Ticket 31653](https://bugs.torproject.org/31653) 
+describes an issue the circuit padding system has with sending 0-delay padding
+cells, and [ticket 32670](https://bugs.torproject.org/32670) describes a
+libevent timer accuracy issue, which causes callbacks to vary up to 10ms from
+their scheduled time, even in absence of load.
 
 If your padding machine and problem space depends on very accurate notions of
 relay-side packet timing, please try that branch and let us know on the
