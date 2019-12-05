@@ -37,8 +37,7 @@ Written by Mike Perry and George Kadianakis.
     - [7.2. Timing and Queuing Optimizations](#72-timing-and-queuing-optimizations)
     - [7.3. Better Machine Negotiation](#73-better-machine-negotiation)
     - [7.4. Probabilistic State Transitions](#74-probabilistic-state-transitions)
-    - [7.5. Improved Simulation Mechanisms](#75-improved-simulation-mechanisms)
-    - [7.6. Cell Arrival Pattern Recognition](#76-cell-arrival-pattern-recognition)
+    - [7.5. Cell Arrival Pattern Recognition](#75-cell-arrival-pattern-recognition)
 - [8. Open Research Problems](#8-open-research-problems)
     - [8.1. Onion Service Circuit Setup](#81-onion-service-circuit-setup)
     - [8.2. Onion Service Fingerprinting](#82-onion-service-fingerprinting)
@@ -607,7 +606,7 @@ defenses are in fact true-to-form or even properly calibrated for direct
 comparison, and discrepancies in results across the literature suggests
 this is not always so.
 
-Our preferred outcome with this framework would be that machines are tuned
+Our preferred outcome with this framework is that machines are tuned
 and optimized on a tracing simulator, but that the final results come from
 an actual live network test of the defense. The traces from this final crawl
 should be preserved as artifacts to be run on the simulator and reproduced
@@ -622,20 +621,24 @@ network activity hundreds or even millions of times. The wall-clock time
 required to do this kind of tuning using live testing or even Shadow network
 emulation may often be prohibitive.
 
-However, because the circuit padding system is event-driven and is otherwise
-only loosely coupled with Tor, and because Tor's unit testing framework
-supports easy replacement of arbitrary functions, it should be relatively easy
-to use the unit testing framework to read in trace files, simulate packets by
-calling into the circuit padding event callbacks, and output new trace files
-by replacing the actual network calls with functions that write packet timings
-to a file.
+To help address this, and to better standardize results, Tobias Pulls has
+implemented [this simulator](ehttps://github.com/pylls/circpad-sim), which
+accomplishes this via a combination of Tor patches and python scripts. This
+simulator can be used to record traces from clients, Guards, Middles, Exits,
+and any other hop in the path, only for circuits that are run by the
+researcher. This makes it possible to safely record baseline traces and
+ultimately even mount passive attacks on the live network, without impacting
+or recording any normal user traffic.
 
 In this way, a live crawl of the Alexa top sites could be performed once, to
 produce a standard "undefended" corpus. Padding machines can be then quickly
-evaluated on these simulated traces in a standardized way.
+evaluated and tuned on these simulated traces in a standardized way, and then
+the results can then be [reproduced on the live Tor
+network](#44-Testing-on-the-Live-Network) with the machines running on your own relays.
 
-See [ticket 31788](https://bugs.torproject.org/31788) for specific tor
-implementation details and pointers on how to do this successfully.
+Please be mindful of the Limitations section of the simulator documentation,
+however, to ensure that you are aware of the edge cases and timing
+approximations that are introduced by this approach.
 
 ### 4.2. Testing in Chutney
 
@@ -663,14 +666,15 @@ machines to the real network when you want to do latency-related testing.
 
 ### 4.3. Testing in Shadow
 
-Shadow is an environment for running entire Tor network simulations, similar
-to Chutney, but designed to be both more memory efficient, as well as provide
-an accurate Tor network topology and latency model.
+[Shadow](https://shadow.github.io/) is an environment for running entire Tor
+network simulations, similar to Chutney, but designed to be both more memory
+efficient, as well as provide an accurate Tor network topology and latency
+model.
 
-XXX: Link to Rob's docs + models
-
-XXX: Do we want to mention netmirage here, too? It is supposed to be
-compatible with shadow models soon.
+While Shadow is significantly more memory efficient than Chutney, and can make
+use of extremely accurate Tor network capacity and latency models, it will not
+be as fast or efficient as the [circpad trace simulator](https://github.com/pylls/circpad-sim),
+if you need to do many many iterations of an experiment to tune your defense.
 
 ### 4.4. Testing on the Live Network
 
@@ -1034,16 +1038,7 @@ transition to that state.
 If you need this feature, please see [ticket
 31787](https://bugs.torproject.org/31787) for more details.
 
-### 7.5. Improved Simulation Mechanisms
-
-As mentioned in [Section 4](#4-evaluating-padding-machines), for large-scale deep-learning
-based experiments, it may be more efficient to tune your machines in a
-simplified packet-trace simulator.
-
-Tor's unit test framework should make this simulator relatively easy to build.
-See [ticket 31788](https://bugs.torproject.org/31788) for details.
-
-### 7.6. Cell Arrival Pattern Recognition
+### 7.5. Cell Arrival Pattern Recognition
 
 Right now, if you wish your machine to react to a certain count of incoming
 cells in a row, you have to have a state for each cell, and use the infinity
