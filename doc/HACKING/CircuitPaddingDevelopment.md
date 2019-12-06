@@ -160,7 +160,8 @@ your padding machines can react to events from other layers.
 ### 1.3. Computation Model
 
 The circuit padding framework was designed to suppport succinctly specified
-defenses that can be tuned through computer-assisted optimization.
+defenses that can be tuned through [computer-assisted
+optimization](#4-evaluating-padding-machines).
 
 We chose to generalize the original [Adaptive Padding 2-state
 design](https://www.freehaven.net/anonbib/cache/ShWa-Timing06.pdf) into an
