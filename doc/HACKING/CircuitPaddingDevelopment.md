@@ -171,7 +171,8 @@ problem search space, especially when expressed as fields of a C structure
 vector in a more abstract feature space).
 
 Unfortunately, while this is a decent theoretical starting point, we do not
-have any proof that this framework is complete. In fact, it may not be.
+have [any proof](#9-must-read-papers) that this framework is complete. In
+fact, it may not be.
 
 For these reasons, you should think of this framework as a guide that can help
 you frame defenses such that they can be described succinctly and will be
