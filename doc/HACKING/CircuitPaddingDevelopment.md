@@ -9,7 +9,9 @@ Written by Mike Perry and George Kadianakis.
 - [0. Background](#0-background)
 - [1. Introduction](#1-introduction)
     - [1.1. System Overview](#11-system-overview)
-    - [1.2. Layering Model and Deployment Constraints](#12-layering-model-and-deployment-constraints)
+    - [1.2. Layering Model](#12-layering-model)
+    - [1.3. Computation Model Intuitions](#13-computation-model-intuitions)
+    - [1.4. Deployment Constraints](#14-other-deployment-constraints)
 - [2. Creating New Padding Machines](#2-creating-new-padding-machines)
     - [2.1. Registering a New Padding Machine](#21-registering-a-new-padding-machine)
     - [2.2. Machine Activation and Shutdown](#22-machine-activation-and-shutdown)
@@ -59,16 +61,15 @@ padding-spec.txt](https://github.com/torproject/torspec/blob/master/padding-spec
 
 These two systems are orthogonal and should not be confused. The
 connection-level padding system regards circuit-level padding as normal data
-traffic, and hence the connection-level padding system will not add any
-additional overhead while the circuit-level padding system is actively
-padding.
+traffic, and hence while the circuit-level padding system is actively padding,
+the connection-level padding system will not add any additional overhead.
 
 While the currently deployed circuit-level padding behavior is quite simple,
-it is built on a more flexible framework.  This framework is an event-driven
-state machine, and is designed to support all of the features needed to
-deploy any delay-free statistically shaped cover traffic on individual
-circuits, with cover traffic flowing to and from a node of the implementor's
-choice (Guard, Middle, Exit, Rendezvous, etc).
+it is built on a flexible framework. This framework supports the description
+of event-driven finite state machine by filling in fields of a simple C
+structure, and is designed to support any delay-free statistically shaped
+cover traffic on individual circuits, with cover traffic flowing to and from a
+node of the implementor's choice (Guard, Middle, Exit, Rendezvous, etc).
 
 This class of system was first proposed in
 [Timing analysis in low-latency mix networks: attacks and defenses](https://www.freehaven.net/anonbib/cache/ShWa-Timing06.pdf)
@@ -93,17 +94,18 @@ modification, but you can extend it to provide new features as well.
 
 ### 1.1. System Overview
 
-Circuit-level padding can occur between Tor clients and target relays at
-any hop of one of the client's circuits. Both parties need to support the same
-padding mechanisms for the system to work, and the client must enable it.
-There is a padding negotiation mechanism in the Tor protocol that clients use
-to ask a relay to start padding, as well as a way for researchers to pin their
-clients' relay selection to the subset of Tor nodes that implement their
+Circuit-level padding can occur between Tor clients and relays at any hop of
+one of the client's circuits. Both parties need to support the same padding
+mechanisms for the system to work, and the client must enable it.  We added a
+padding negotiation relay cell to the Tor protocol that clients use to ask a
+relay to start padding, as well as a torrc directive for researchers to pin
+their clients' relay selection to the subset of Tor nodes that implement their
 custom defenses, to support ethical live network testing and evaluation.
 
 Circuit-level padding is performed by 'padding machines'. A padding machine is
 a finite state machine. Every state specifies a different form of
-padding style, or stage of padding, in terms of latency and throughput.
+padding style, or stage of padding, in terms of inter-packet timings and total
+packet counts.
 
 Padding state machines are specified by filling in fields of a C structure,
 which specifies the transitions between padding states based on various events,
@@ -119,16 +121,16 @@ The event driven, self-contained nature of this framework is also designed to
 make [evaluation](#4-evaluating-padding-machines) both expedient and rigorously
 reproducible.
 
-The following sections cover the details of the engineering steps to write,
-test, and deploy a padding machine, as well as how to extend the framework to
-support new machine features.
+This document covers the engineering steps to write, test, and deploy a
+padding machine, as well as how to extend the framework to support new machine
+features.
 
 If you prefer to learn by example, you may want to skip to either the
 [QuickStart Guide](CircuitPaddingQuickStart.md), and/or [Section
 5](#5-example-padding-machines) for example machines to get you up and running
 quickly.
 
-### 1.2. Layering Model and Deployment Constraints
+### 1.2. Layering Model
 
 The circuit padding framework is designed to provide one layer in a layered
 system of interchangeable components.
@@ -147,9 +149,51 @@ transports](https://trac.torproject.org/projects/tor/wiki/doc/AChildsGardenOfPlu
 which may optionally be used in conjunction with this framework (or without
 it).
 
-The lack of support for delay in the framework is a deliberate choice. We are
-keenly aware that if we were to support additional delay, defenses would be
-able to have [more success with less bandwidth
+This document focuses primarily on the circuit padding framework's cover
+traffic features, and will only briefly touch on the potential obfuscation and
+application layer coupling points of the framework. Explicit layer coupling 
+points can be created by adding either [new machine appplication
+events](#62-machine-application-events) or [new internal machine
+events](#63-internal-machine-events) to the circuit padding framework, so that
+your padding machines can react to events from other layers.
+
+### 1.3. Computation Model Intuitions
+
+We chose to generalize the original [Adaptive Padding 2-state
+design](https://www.freehaven.net/anonbib/cache/ShWa-Timing06.pdf) into an
+event-driven state machine because state machines are the simplest and most
+efficient form of pattern recognition devices from [automata
+theory](https://en.wikipedia.org/wiki/Finite-state_machine). They also can be
+easily modeled as an optimization problem search space.
+
+Unfortunately, while this is a decent theoretical starting point, we do not
+have any proof that this framework is complete. In fact, it may not be.
+
+For these reasons, you should think of this framework as a guide that can help
+you frame defenses such that they can be described succinctly and will be
+amenable to automated tuning and computer-assisted optimization.
+
+This means that you should be careful not to artificially constrain your
+solution space when designing candidate defenses, and you should also be
+careful not to use anything that is not strictly necessary. For example: you
+may not need all of the histogram features used by Adaptive Padding, but you
+might need other forms of [pattern
+recognition](#75-more-complex-pattern-recognition). 
+
+Therefore, before you begin your optimization phase, you should carefully
+consider the [features and
+optimizations](#7-future-features-and-optimizations) that we suspect or know
+will be useful.
+
+### 1.4. Other Deployment Constraints
+
+The framework has some limitations that are the result of deliberate
+choices. We are unlikely to deploy defenses that ignore these limitations.
+
+In particular, we have deliberately not provided any mechanism to delay actual
+user traffic, even though we are keenly aware that if we were to support
+additional delay, defenses would be able to have [more success with less
+bandwidth
 overhead](https://freedom.cs.purdue.edu/anonymity/trilemma/index.html).
 
 In the website traffic fingerprinting domain, [provably optimal
@@ -179,7 +223,7 @@ exponentially](https://ipcarrier.blogspot.com/2014/02/bandwidth-growth-nearly-wh
 where as the speed of light is fixed. Significant engineering effort has been
 devoted to optimizations that reduce the effect of latency on Internet
 protocols. To go against this trend would ensure our irrelevance to the wider
-conversation about traffic analysis of low latency Internet protocols.
+conversation about traffic analysis defenses for low latency Internet protocols.
 
 On the other hand, through [load
 balancing](https://gitweb.torproject.org/torspec.git/tree/proposals/265-load-balancing-with-overhead.txt)
@@ -188,30 +232,24 @@ believe it is possible to add significant bandwidth overhead in the form of
 cover traffic, without significantly impacting end-user performance.
 
 For these reasons, we believe the trade-off should be in favor of adding more
-cover traffic, rather than imposing queuing overhead and queuing delay.
+cover traffic, rather than imposing queuing memory overhead and queuing delay.
 
-However, as a last resort for narrowly scoped application domains (such as
+As a last resort for narrowly scoped application domains (such as
 shaping Tor service-side onion service traffic to look like other websites or
 different application-layer protocols), delay *may* be added at the
 [application layer](https://petsymposium.org/2017/papers/issue2/paper54-2017-2-source.pdf).
-Ideally, any additional cover traffic required by such defenses would still be
+Any additional cover traffic required by such defenses should still be
 added at the circuit padding layer using this framework, to provide
 engineering efficiency through loose layer coupling and component re-use, as
 well as to provide additional gains against [low
 resolution](https://github.com/torproject/torspec/blob/master/padding-spec.txt#L47)
-end-to-end traffic analysis.
+end-to-end traffic correlation.
 
 Because such delay-based defenses will impact performance significantly more
 than simply adding cover traffic, they must be optional, and negotiated by
 only specific application layer endpoints that want them. This will have
 consequences for anonymity sets and base rates, if such traffic shaping and
 additional cover traffic is not very carefully constructed.
-
-This document focuses primarily on the circuit padding framework's cover
-traffic features, and will only briefly touch on the potential obfuscation and
-application layer coupling points of the framework (you'll want to add those
-coupling points by [adding new events](#62-machine-application-events) to the
-circuit padding framework).
 
 In terms of acceptable overhead, because Tor onion services
 [currently use](https://metrics.torproject.org/hidserv-rend-relayed-cells.html)
@@ -223,9 +261,6 @@ higher-overhead defenses. We encourage researchers to target this use case
 for defenses that require more overhead, and/or for the deployment of
 optional negotiated application-layer delays on either the server or the
 client side.
-
-For the a list of research areas where we believe this framework will
-prove useful, see [Section 8](#8-open-research-problems).
 
 ## 2. Creating New Padding Machines
 
@@ -765,7 +800,7 @@ The key insight to understand Tamaraw's optimality is that it achieves one
 such optimal transform by delaying traffic below a circuit's throughput. By
 doing this, it creates a queue that is rarely empty, allowing it to produce
 a provably optimal transform with minimal overhead. As [Section
-1.2](#12-layering-model-and-deployment-constraints) explains, this queue
+1.4](#14-other-deployment-constraints) explains, this queue
 cannot be maintained on the live Tor network without risk of out-of-memory
 conditions at relays.
 
@@ -1142,7 +1177,7 @@ Except for WTF-PAD, these papers were selected because they point towards
 optimality bounds that can be benchmarked against.
 
 We cite them even though [we are
-skeptical](#12-layering-model-and-deployment-constraints) that provably
+skeptical](#13-computation-model-intuitions) that provably
 optimal defenses can be constructed, at least not without trival or
 impractical transforms (such as those that can be created with unbounded queue
 capacity, or stored knowledge of traces for every possible HTTP trace
