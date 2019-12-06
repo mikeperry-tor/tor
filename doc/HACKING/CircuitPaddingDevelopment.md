@@ -159,7 +159,7 @@ your padding machines can react to events from other layers.
 
 ### 1.3. Computation Model
 
-The circuit padding framework was designed to suppport succinctly specified
+The circuit padding framework is designed to suppport succinctly specified
 defenses that can be tuned through [computer-assisted
 optimization](#4-evaluating-padding-machines).
 
@@ -172,13 +172,22 @@ theory](https://en.wikipedia.org/wiki/Finite-state_machine).
 Most importantly: this framing allows cover traffic defenses to be modeled as
 an optimization problem search space, expressed as fields of a C structure
 (which is simulataneously a compact opaque bitstring as well as a symbolic
-vector in an abstract feature space). This space is particularly well suited
-to search by gradient descent, GAs, and GANs.
+vector in an abstract feature space).
 
-Even so, before you begin the optimization phase for your defense, you should
+# XXX: Is Balanced Accuracy what we want? It seems pretty close...
+Each padding machine has an inherent fitness, which is the amount by which it
+reduces the [Balanced
+Accuracy](https://en.wikipedia.org/wiki/Precision_and_recall#Imbalanced_Data)
+of an adversary's classifier, for an amount of traffic overhead. This kind of
+space is particularly well suited to search by gradient descent, GAs, and
+GANs.
+
+However, before you begin the optimization phase for your defense, you should
 also carefully consider the [features and
 optimizations](#7-future-features-and-optimizations) that we suspect will be
-useful, and also see if you can come up with any more. For example, some
+useful, and also see if you can come up with any more. You should similarly be
+sure to restrict your search space to avoid areas of the bitstring/feature
+vector that you are sure you will not need. For example, some
 [applications](#8-open-research-problems) may not need the histogram
 accounting used by Adaptive Padding, but might need to add other forms of
 [pattern recognition](#75-more-complex-pattern-recognition) to react to
