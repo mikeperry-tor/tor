@@ -32,12 +32,13 @@ Written by Mike Perry and George Kadianakis.
 - [6. Framework Implementation Details](#6-framework-implementation-details)
     - [6.1. Memory Allocation Conventions](#61-memory-allocation-conventions)
     - [6.2. Machine Application Events](#62-machine-application-events)
+    - [6.3. Internal Machine Events](#63-internal-machine-events)
 - [7. Future Features and Optimizations](#7-future-features-and-optimizations)
     - [7.1. Load Balancing and Flow Control](#71-load-balancing-and-flow-control)
     - [7.2. Timing and Queuing Optimizations](#72-timing-and-queuing-optimizations)
     - [7.3. Better Machine Negotiation](#73-better-machine-negotiation)
     - [7.4. Probabilistic State Transitions](#74-probabilistic-state-transitions)
-    - [7.5. Cell Arrival Pattern Recognition](#75-cell-arrival-pattern-recognition)
+    - [7.5. More Complex Pattern Recognition](#75-more-complex-pattern-recognition)
 - [8. Open Research Problems](#8-open-research-problems)
     - [8.1. Onion Service Circuit Setup](#81-onion-service-circuit-setup)
     - [8.2. Onion Service Fingerprinting](#82-onion-service-fingerprinting)
@@ -939,6 +940,22 @@ The machine application event callbacks are prefixed by `circpad_machine_event_`
   - `circpad_machine_event_circ_has_no_streams()`: Called when the last
     stream is detached from a circuit.
 
+### 6.3. Internal Machine Events
+
+To provide for some additional capabilities beyond simple finite state machine
+behavior, the circuit padding machines also have internal events that they
+emit to themselves when packet count length limits are hit, when the Infinity
+bin is sampled, and when the histogram bins are emptied of all tokens.
+
+These events are implemented as `circpad_internal_event_*` functions in
+`circuitpadding.c`, which are called from various areas that determine when
+the events should occur.
+
+While the conditions that trigger these internal events to be called may be
+complex, they are processed by the state machine definitions in a nearly
+identical manner as the cell processing events, with the exception that they
+are sent to the current machine only, rather than all machines on the circuit.
+
 
 ## 7. Future Features and Optimizations
 
@@ -993,15 +1010,6 @@ description of this problem, and an experimental branch that changes the cell
 event callback locations to be from circuitmux post-queue, which with KIST,
 should be an accurate reflection of when they are actually sent on the wire.
 
-To make matters worse, Tor's current timers are not as precise as some
-padding designs would require.  Even if we solve the queuing issues, we
-will still have issues of timing precision to solve. There are two bugs to
-track these problems. [Ticket 31653](https://bugs.torproject.org/31653) 
-describes an issue the circuit padding system has with sending 0-delay padding
-cells, and [ticket 32670](https://bugs.torproject.org/32670) describes a
-libevent timer accuracy issue, which causes callbacks to vary up to 10ms from
-their scheduled time, even in absence of load.
-
 If your padding machine and problem space depends on very accurate notions of
 relay-side packet timing, please try that branch and let us know on the
 ticket if you need any further assistance fixing it up.
@@ -1011,6 +1019,15 @@ overhead reducing optimizations by letting machines specify flags to indicate
 that padding should not be sent if there are any cells pending in the cell
 queue, for doing things like extending cell bursts more accurately and with
 less overhead.
+
+However, even if we solve the queuing issues, Tor's current timers are not as
+precise as some padding designs may require. We will still have issues of
+timing precision to solve. [Ticket 31653](https://bugs.torproject.org/31653)
+describes an issue the circuit padding system has with sending 0-delay padding
+cells, and [ticket 32670](https://bugs.torproject.org/32670) describes a
+libevent timer accuracy issue, which causes callbacks to vary up to 10ms from
+their scheduled time, even in absence of load.
+
 
 ### 7.3. Better Machine Negotiation
 
@@ -1042,7 +1059,7 @@ transition to that state.
 If you need this feature, please see [ticket
 31787](https://bugs.torproject.org/31787) for more details.
 
-### 7.5. Cell Arrival Pattern Recognition
+### 7.5. More Complex Pattern Recognition Primitives
 
 Right now, if you wish your machine to react to a certain count of incoming
 cells in a row, you have to have a state for each cell, and use the infinity
@@ -1051,7 +1068,25 @@ if each state had an arrival cell counter and inter-cell timeout. Or we could
 make more complex mechanisms to recognize certain patterns of arrival traffic
 in a state.
 
-XXX: Ticket for this
+Because it is not clear what kinds of patterns may be useful to recognize, we
+have not done either yet.
+
+The best way to build recognition primitives like this into the framework is
+to add additional [Internal Machine Events](#63-internal-machine-events) for
+the pattern in question.
+
+For example, a simple but useful additional event might be to transition
+whenever any of your histogram bins are empty, rather than all of them. To do
+this, you would add `CIRCPAD_EVENT_ANY_BIN_EMPTY` to the enum
+`circpad_event_t` in `circuitpadding.h`. You would then create a function
+`circuitpadding_internal_event_any_bin_empty()`, which would work just like
+`circuitpadding_internal_event_bin_empty()`, and also be called from
+`check_machine_token_supply()` in `circuitpadding.c` but with the check for
+each bin being zero instead of the total. With this change, new machines could
+react to this new event in the same way as any other.
+
+If you have any other ideas that may be useful, please comment on [ticket
+32680](https://bugs.torproject.org/32680).
 
 
 ## 8. Open Research Problems
