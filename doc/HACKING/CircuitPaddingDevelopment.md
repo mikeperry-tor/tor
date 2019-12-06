@@ -10,7 +10,7 @@ Written by Mike Perry and George Kadianakis.
 - [1. Introduction](#1-introduction)
     - [1.1. System Overview](#11-system-overview)
     - [1.2. Layering Model](#12-layering-model)
-    - [1.3. Computation Model Intuitions](#13-computation-model-intuitions)
+    - [1.3. Computation Model](#13-computation-model)
     - [1.4. Deployment Constraints](#14-other-deployment-constraints)
 - [2. Creating New Padding Machines](#2-creating-new-padding-machines)
     - [2.1. Registering a New Padding Machine](#21-registering-a-new-padding-machine)
@@ -157,14 +157,18 @@ events](#62-machine-application-events) or new [internal machine
 events](#63-internal-machine-events) to the circuit padding framework, so that
 your padding machines can react to events from other layers.
 
-### 1.3. Computation Model Intuitions
+### 1.3. Computation Model
 
 We chose to generalize the original [Adaptive Padding 2-state
 design](https://www.freehaven.net/anonbib/cache/ShWa-Timing06.pdf) into an
 event-driven state machine because state machines are the simplest and most
 efficient form of pattern recognition devices from [automata
-theory](https://en.wikipedia.org/wiki/Finite-state_machine). They also can be
-easily modeled as an optimization problem search space.
+theory](https://en.wikipedia.org/wiki/Finite-state_machine).
+
+Most importantly: state machines can be easily modeled as an optimization
+problem search space, especially when expressed as fields of a C structure
+(which is simulataneously a compact opaque bitstring as well as a symbolic
+vector in a more abstract feature space).
 
 Unfortunately, while this is a decent theoretical starting point, we do not
 have any proof that this framework is complete. In fact, it may not be.
