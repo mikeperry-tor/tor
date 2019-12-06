@@ -666,8 +666,9 @@ required to do this kind of tuning using live testing or even Shadow network
 emulation may often be prohibitive.
 
 To help address this, and to better standardize results, Tobias Pulls has
-implemented [this simulator](ehttps://github.com/pylls/circpad-sim), which
-accomplishes this via a combination of Tor patches and python scripts. This
+implemented a [circpad machine trace simulator](https://github.com/pylls/circpad-sim),
+which uses Tor's unit test framework to simulate applying padding machines to
+circuit packet traces via a combination of Tor patches and python scripts. This
 simulator can be used to record traces from clients, Guards, Middles, Exits,
 and any other hop in the path, only for circuits that are run by the
 researcher. This makes it possible to safely record baseline traces and
