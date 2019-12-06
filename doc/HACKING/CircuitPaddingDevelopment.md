@@ -764,7 +764,7 @@ number of packets in length.
 The key insight to understand Tamaraw's optimality is that it achieves one
 such optimal transform by delaying traffic below a circuit's throughput. By
 doing this, it creates a queue that is rarely empty, allowing it to produce
-such provably optimal transforms with minimal overhead. As [Section
+a provably optimal transform with minimal overhead. As [Section
 1.2](#12-layering-model-and-deployment-constraints) explains, this queue
 cannot be maintained on the live Tor network without risk of out-of-memory
 conditions at relays.
@@ -786,13 +786,19 @@ Accomplishing this is an unsolved problem.
 
 ### 5.4. Other Padding Machines
 
-XXX: Ask other researchers to help fill in subsections for these machines
+Our partners in this project at RIT have produced a couple prototypes, based
+on their published research designs
+[REB and RBB](https://www.researchgate.net/publication/329743510_UNDERSTANDING_FEATURE_DISCOVERY_IN_WEBSITE_FINGERPRINTING_ATTACKS).
 
-   - REB (from
-     https://www.researchgate.net/publication/329743510_UNDERSTANDING_FEATURE_DISCOVERY_IN_WEBSITE_FINGERPRINTING_ATTACKS)
-   - No-Delay RBB (Bases on
-     https://www.researchgate.net/publication/329743510_UNDERSTANDING_FEATURE_DISCOVERY_IN_WEBSITE_FINGERPRINTING_ATTACKS)
-   - Multiple machines with matching conditions
+As [their writeup
+explains](https://github.com/notem/tor-rbp-padding-machine-doc), because RBB
+uses delay, the circuit padding machine that they made is a no-delay version.
+
+They also ran into an issue with the 0-delay timing workaround for [bug
+31653](https://bugs.torproject.org/31653). Keep an eye on that bug for updates
+with improved workarounds/fixes.
+
+Their code is [available on github](https://github.com/notem/tor/tree/circuit_padding_rbp_machine).
 
 
 ## 6. Framework Implementation Details
