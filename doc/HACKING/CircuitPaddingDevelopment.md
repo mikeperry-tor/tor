@@ -174,7 +174,7 @@ an optimization problem search space, expressed as fields of a C structure
 (which is simulataneously a compact opaque bitstring as well as a symbolic
 vector in an abstract feature space).
 
-# XXX: Is Balanced Accuracy what we want? It seems pretty close...
+<!-- XXX: Is Balanced Accuracy what we want? It seems pretty close... !-->
 Each padding machine has an inherent fitness, which is the amount by which it
 reduces the [Balanced
 Accuracy](https://en.wikipedia.org/wiki/Precision_and_recall#Imbalanced_Data)
