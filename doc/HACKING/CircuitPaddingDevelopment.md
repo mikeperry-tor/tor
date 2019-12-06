@@ -1099,23 +1099,31 @@ transition to that state.
 If you need this feature, please see [ticket
 31787](https://bugs.torproject.org/31787) for more details.
 
-### 7.5. More Complex Pattern Recognition Primitives
+### 7.5. More Complex Pattern Recognition
 
-Right now, if you wish your machine to react to a certain count of incoming
-cells in a row, you have to have a state for each cell, and use the infinity
-bin to timeout of the sequence in each state. We could make this more compact
-if each state had an arrival cell counter and inter-cell timeout. Or we could
-make more complex mechanisms to recognize certain patterns of arrival traffic
-in a state.
+State machines are extremely efficient sequence recognition devices. But they
+are not great pattern recognition devices. This is one of the reasons why
+[Adaptive Padding](https://www.freehaven.net/anonbib/cache/ShWa-Timing06.pdf)
+used state machines in combination with histograms, to model the target
+distribution of interpacket delays for transmitted packets.
 
-Because it is not clear what kinds of patterns may be useful to recognize, we
-have not done either yet.
+However, there currently is no such optimization for reaction to patterns of
+*received* traffic. There may also be cases where defenses must react to more
+complex patterns of sent traffic than can be expressed by our current
+histogram and length count events.
+
+In other words, if you wish your machine to react to a certain count of
+incoming cells in a row, you have to have a state for each cell, and use the
+infinity bin to timeout of the sequence in each state. We could make this more
+compact if each state had an arrival cell counter and inter-cell timeout. Or
+we could make more complex mechanisms to recognize certain patterns of arrival
+traffic in a state.
 
 The best way to build recognition primitives like this into the framework is
 to add additional [Internal Machine Events](#63-internal-machine-events) for
 the pattern in question.
 
-For example, a simple but useful additional event might be to transition
+As a simple example, a useful additional event might be to transition
 whenever any of your histogram bins are empty, rather than all of them. To do
 this, you would add `CIRCPAD_EVENT_ANY_BIN_EMPTY` to the enum
 `circpad_event_t` in `circuitpadding.h`. You would then create a function
