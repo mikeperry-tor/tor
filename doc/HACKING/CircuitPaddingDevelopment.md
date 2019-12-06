@@ -152,8 +152,8 @@ it).
 This document focuses primarily on the circuit padding framework's cover
 traffic features, and will only briefly touch on the potential obfuscation and
 application layer coupling points of the framework. Explicit layer coupling 
-points can be created by adding either [new machine appplication
-events](#62-machine-application-events) or [new internal machine
+points can be created by adding either new [machine appplication
+events](#62-machine-application-events) or new [internal machine
 events](#63-internal-machine-events) to the circuit padding framework, so that
 your padding machines can react to events from other layers.
 
