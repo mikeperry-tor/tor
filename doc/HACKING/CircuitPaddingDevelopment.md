@@ -159,36 +159,29 @@ your padding machines can react to events from other layers.
 
 ### 1.3. Computation Model
 
+The circuit padding framework was designed to suppport succinctly specified
+defenses that can be tuned through computer-assisted optimization.
+
 We chose to generalize the original [Adaptive Padding 2-state
 design](https://www.freehaven.net/anonbib/cache/ShWa-Timing06.pdf) into an
-event-driven state machine because state machines are the simplest and most
-efficient form of pattern recognition devices from [automata
+event-driven state machine because state machines are the simplest form of
+sequence recognition devices from [automata
 theory](https://en.wikipedia.org/wiki/Finite-state_machine).
 
-Most importantly: state machines can be easily modeled as an optimization
-problem search space, especially when expressed as fields of a C structure
+Most importantly: this framing allows cover traffic defenses to be modeled as
+an optimization problem search space, expressed as fields of a C structure
 (which is simulataneously a compact opaque bitstring as well as a symbolic
-vector in a more abstract feature space).
+vector in an abstract feature space). This space is particularly well suited
+to search by gradient descent, GAs, and GANs.
 
-Unfortunately, while this is a decent theoretical starting point, we do not
-have [any proof](#9-must-read-papers) that this framework is complete. In
-fact, it may not be.
-
-For these reasons, you should think of this framework as a guide that can help
-you frame defenses such that they can be described succinctly and will be
-amenable to automated tuning and computer-assisted optimization.
-
-This means that you should be careful not to artificially constrain your
-solution space when designing candidate defenses, and you should also be
-careful not to use anything that is not strictly necessary. For example: you
-may not need all of the histogram features used by Adaptive Padding, but you
-might need other forms of [pattern
-recognition](#75-more-complex-pattern-recognition). 
-
-Therefore, before you begin your optimization phase, you should carefully
-consider the [features and
-optimizations](#7-future-features-and-optimizations) that we suspect or know
-will be useful.
+Even so, before you begin the optimization phase for your defense, you should
+also carefully consider the [features and
+optimizations](#7-future-features-and-optimizations) that we suspect will be
+useful, and also see if you can come up with any more. For example, some
+[applications](#8-open-research-problems) may not need the histogram
+accounting used by Adaptive Padding, but might need to add other forms of
+[pattern recognition](#75-more-complex-pattern-recognition) to react to
+sequences that resemble HTTP GET and HTTP POST.
 
 ### 1.4. Other Deployment Constraints
 
