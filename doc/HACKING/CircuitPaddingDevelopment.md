@@ -142,7 +142,7 @@ system of interchangeable components.
 
 The circuit padding framework operates at the Tor circuit layer. It only deals
 with the inter-cell timings and quantity of cells sent on a circuit. It can
-insert cells on a circuit in arbitrary patterns, and in response to arbitary
+insert cells on a circuit in arbitrary patterns, and in response to arbitrary
 conditions, but it cannot delay cells. It also does not deal with packet
 sizes, how cells are packed into TLS records, or ways that the Tor protocol
 might be recognized on the wire.
@@ -157,14 +157,14 @@ it).
 This document focuses primarily on the circuit padding framework's cover
 traffic features, and will only briefly touch on the potential obfuscation and
 application layer coupling points of the framework. Explicit layer coupling 
-points can be created by adding either new [machine appplication
+points can be created by adding either new [machine application
 events](#62-machine-application-events) or new [internal machine
 events](#63-internal-machine-events) to the circuit padding framework, so that
 your padding machines can react to events from other layers.
 
 ### 1.3. Computation Model
 
-The circuit padding framework is designed to suppport succinctly specified
+The circuit padding framework is designed to support succinctly specified
 defenses that can be tuned through [computer-assisted
 optimization](#4-evaluating-padding-machines).
 
@@ -176,14 +176,14 @@ theory](https://en.wikipedia.org/wiki/Finite-state_machine).
 
 Most importantly: this framing allows cover traffic defenses to be modeled as
 an optimization problem search space, expressed as fields of a C structure
-(which is simulataneously a compact opaque bitstring as well as a symbolic
+(which is simultaneously a compact opaque bitstring as well as a symbolic
 vector in an abstract feature space). This kind of space is particularly well
 suited to search by gradient descent, GAs, and GANs. 
 
 When performing this optimization search, each padding machine should have a
-fitness function, which will allow two padding machines to be compated for
+fitness function, which will allow two padding machines to be compared for
 relative effectiveness. Optimization searches work best if this fitness can be
-represented as a single number, for examble the total amount by which it
+represented as a single number, for example the total amount by which it
 reduces the [Balanced
 Accuracy](https://en.wikipedia.org/wiki/Precision_and_recall#Imbalanced_Data)
 of an adversary's classifier, divided by an amount of traffic overhead. 
@@ -795,7 +795,7 @@ fairly well documented. Each function goes through the following steps:
 [Adaptive Padding Early](https://www.cs.kau.se/pulls/hot/thebasketcase-ape/)
 is a variant of Adaptive Padding/WTF-PAD that does not use histograms or token
 removal to shift padding distributions, but instead uses fixed parameterized
-distributions to specify inter-packet timing threshholds for burst and gap
+distributions to specify inter-packet timing thresholds for burst and gap
 inter-packet delays.
 
 Tobias Pulls's [QuickStart Guide](CircuitPaddingQuickStart.md) describes how
@@ -1171,7 +1171,7 @@ We have done nothing to obscure the service side of onion service circuit
 setup. Because service-side onion services will have the reverse traffic byte
 counts as normal clients, they will likely need some kind of [hybrid
 application layer traffic shaping](#53-sketch-of-tamaraw), in addition to
-simple circuit setup ofuscation.
+simple circuit setup obfuscation.
 
 Fingerprinting in
 [combination](https://github.com/mikeperry-tor/vanguards/blob/master/README_SECURITY.md)
@@ -1210,7 +1210,7 @@ Except for WTF-PAD, these papers were selected because they point towards
 optimality bounds that can be benchmarked against.
 
 We cite them even though we are skeptical that provably optimal defenses can
-be constructed, at least not without trival or impractical transforms (such as
+be constructed, at least not without trivial or impractical transforms (such as
 those that can be created with unbounded queue capacity, or stored knowledge
 of traces for every possible HTTP trace on the Internet).
 
