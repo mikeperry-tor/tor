@@ -1157,35 +1157,44 @@ If you have any other ideas that may be useful, please comment on [ticket
 
 ### 8.1. Onion Service Circuit Setup
 
-XXX: Our circuit setup padding does not address timing-based features, only
+Our circuit setup padding does not address timing-based features, only
 packet counts. Deep learning can probably see this.
 
-XXX: If you write an attack paper on this without a defense, we'll light you
-and your attack paper on fire. ;)
+However, before going too deep down the timing rabithole, we may need to make
+[some improvements to Tor](#72-timing-and-queuing-optimizations). Please
+comment on those tickets if you need this.
 
 ### 8.2. Onion Service Fingerprinting
 
-XXX: Don't forget to mention studying fingerprinting in
-[combination](https://github.com/mikeperry-tor/vanguards/blob/master/README_SECURITY.md) with
-[vanguards](https://github.com/mikeperry-tor/vanguards/blob/master/README_TECHNICAL.md).
+We have done nothing to obscure the service side of onion service circuit
+setup. Because service-side onion services will have the reverse traffic byte
+counts as normal clients, they will likely need some kind of [hybrid
+application layer traffic shaping](#53-a-sketch-of-tamaraw), in addition to
+simple circuit setup ofuscation.
+
+Fingerprinting in
+[combination](https://github.com/mikeperry-tor/vanguards/blob/master/README_SECURITY.md)
+with
+[vanguards](https://github.com/mikeperry-tor/vanguards/blob/master/README_TECHNICAL.md)
+ia also an open issue.
 
 ### 8.3. Open World Fingerprinting
 
-XXX: Discuss tuning of WTF-PAD. WTF-PAD was never tuned. (It didn't need *any*
-tuning to beat classifiers before deep learning).
-
-XXX: We designed this whole framework around ease of representing it as an
-optimization problem. Use that.
+Similarly, Open World/clearweb website fingerprinting defenses remain
+an unsolved problem from the practicality point of view. The original WTF-PAD
+defense was never tuned, and it is showing accuracy issues against deep
+learning attacks.
 
 ### 8.4. Protocol Usage Fingerprinting
 
-XXX: classification of http vs ssh vs irc vs Signal, etc; defenses for same.
+Traffic Fingerprinting to determine the protocol in use by a client has not
+been studied, either from the attack or defense point of view.
 
 ### 8.5. Datagram Transport Side Channels
 
-XXX: Padding can reduce the accuracy of dropped-cell side channels in such
+Padding can reduce the accuracy of dropped-cell side channels in such
 transports, but we don't know [how to measure
-this](https://lists.torproject.org/pipermail/tor-dev/2018-November/013562.html)
+this](https://lists.torproject.org/pipermail/tor-dev/2018-November/013562.html).
 
 ## 9. Must Read Papers
 
