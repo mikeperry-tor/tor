@@ -1094,6 +1094,7 @@ not been implemented yet:
   * [Exit Policy-based Stream Conditions](https://bugs.torproject.org/29083)
   * [Probability to apply machine/Cointoss condition](https://bugs.torproject.org/30092)
   * [Probability distributions for launching new padding circuit(s)](https://bugs.torproject.org/31783)
+  * [More flexible purpose handling](https://bugs.torproject.org/32040)
 
 Additionally, the following features may help to obscure that padding is being
 negotiated, and/or streamline that negotiation process:
@@ -1169,7 +1170,7 @@ comment on those tickets if you need this.
 We have done nothing to obscure the service side of onion service circuit
 setup. Because service-side onion services will have the reverse traffic byte
 counts as normal clients, they will likely need some kind of [hybrid
-application layer traffic shaping](#53-a-sketch-of-tamaraw), in addition to
+application layer traffic shaping](#53-sketch-of-tamaraw), in addition to
 simple circuit setup ofuscation.
 
 Fingerprinting in
@@ -1208,12 +1209,10 @@ These are by far the most important papers in the space, to date:
 Except for WTF-PAD, these papers were selected because they point towards
 optimality bounds that can be benchmarked against.
 
-We cite them even though [we are
-skeptical](#13-computation-model-intuitions) that provably
-optimal defenses can be constructed, at least not without trival or
-impractical transforms (such as those that can be created with unbounded queue
-capacity, or stored knowledge of traces for every possible HTTP trace
-on the Internet).
+We cite them even though we are skeptical that provably optimal defenses can
+be constructed, at least not without trival or impractical transforms (such as
+those that can be created with unbounded queue capacity, or stored knowledge
+of traces for every possible HTTP trace on the Internet).
 
 We also are not demanding an optimality or security proof for every defense.
 
