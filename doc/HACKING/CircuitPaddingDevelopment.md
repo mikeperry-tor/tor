@@ -60,7 +60,8 @@ circuit-level padding behavior is described in [section 3 of
 padding-spec.txt](https://github.com/torproject/torspec/blob/master/padding-spec.txt#L282).
 
 These two systems are orthogonal and should not be confused. The
-connection-level padding system regards circuit-level padding as normal data
+connection-level padding system is only active while the TLS connection is
+otherwise idle. Moreover, it regards circuit-level padding as normal data
 traffic, and hence while the circuit-level padding system is actively padding,
 the connection-level padding system will not add any additional overhead.
 
@@ -90,17 +91,20 @@ defenses in Tor. It may be used in combination with application-layer
 defenses, and/or obfuscation defenses, or on its own.
 
 Its current design should be enough to deploy most defenses without
-modification, but you can extend it to provide new features as well.
+modification, but you can extend it to [provide new
+features](#7-future-features-and-optimizations) as well.
 
 ### 1.1. System Overview
 
 Circuit-level padding can occur between Tor clients and relays at any hop of
 one of the client's circuits. Both parties need to support the same padding
-mechanisms for the system to work, and the client must enable it.  We added a
-padding negotiation relay cell to the Tor protocol that clients use to ask a
-relay to start padding, as well as a torrc directive for researchers to pin
-their clients' relay selection to the subset of Tor nodes that implement their
-custom defenses, to support ethical live network testing and evaluation.
+mechanisms for the system to work, and the client must enable it.
+
+We added a padding negotiation relay cell to the Tor protocol that clients use
+to ask a relay to start padding, as well as a torrc directive for researchers
+to pin their clients' relay selection to the subset of Tor nodes that
+implement their custom defenses, to support ethical live network testing and
+evaluation.
 
 Circuit-level padding is performed by 'padding machines'. A padding machine is
 a finite state machine. Every state specifies a different form of
@@ -113,9 +117,10 @@ probability distributions of inter-packet delays, and the conditions under
 which padding machines should be applied to circuits.
 
 This compact C structure representation is designed to function as a
-microlanguage, which can be compiled down into a bitstring that can be tuned using
-various optimization methods (such as gradient descent, GAs, or GANs), either
-in bitstring form or C struct form.
+microlanguage, which can be compiled down into a
+bitstring that [can be tuned](#13-computation-model) using various
+optimization methods (such as gradient descent, GAs, or GANs), either in
+bitstring form or C struct form.
 
 The event driven, self-contained nature of this framework is also designed to
 make [evaluation](#4-evaluating-padding-machines) both expedient and rigorously
@@ -172,17 +177,18 @@ theory](https://en.wikipedia.org/wiki/Finite-state_machine).
 Most importantly: this framing allows cover traffic defenses to be modeled as
 an optimization problem search space, expressed as fields of a C structure
 (which is simulataneously a compact opaque bitstring as well as a symbolic
-vector in an abstract feature space).
+vector in an abstract feature space). This kind of space is particularly well
+suited to search by gradient descent, GAs, and GANs. 
 
-<!-- XXX: Is Balanced Accuracy what we want? It seems pretty close... !-->
-Each padding machine has an inherent fitness, which is the amount by which it
+When performing this optimization search, each padding machine should have a
+fitness function, which will allow two padding machines to be compated for
+relative effectiveness. Optimization searches work best if this fitness can be
+represented as a single number, for examble the total amount by which it
 reduces the [Balanced
 Accuracy](https://en.wikipedia.org/wiki/Precision_and_recall#Imbalanced_Data)
-of an adversary's classifier, for an amount of traffic overhead. This kind of
-space is particularly well suited to search by gradient descent, GAs, and
-GANs.
+of an adversary's classifier, divided by an amount of traffic overhead. 
 
-However, before you begin the optimization phase for your defense, you should
+Before you begin the optimization phase for your defense, you should
 also carefully consider the [features and
 optimizations](#7-future-features-and-optimizations) that we suspect will be
 useful, and also see if you can come up with any more. You should similarly be
@@ -280,7 +286,7 @@ distribution.
 
 Again, if you prefer to learn by example, you may want to skip to either the
 [QuickStart Guide](CircuitPaddingQuickStart.md), and/or [Section
-5](#5-example-padding-machines) for example machines to get you up and running
+5](#5-example-padding-machines) for example machines to get up and running
 quickly.
 
 To create a new padding machine, you must:
@@ -296,8 +302,8 @@ To create a new padding machine, you must:
 
 ### 2.1. Registering a New Padding Machine
 
-Again, a circuit padding machine is designed to be specified entirely as a single
-C structure.
+Again, a circuit padding machine is designed to be specified entirely as a [single
+C structure](#13-computation-model).
 
 Your machine definitions should go into their own functions in
 [circuitpadding_machines.c](https://github.com/torproject/tor/blob/master/src/core/or/circuitpadding_machines.c). For
@@ -632,8 +638,8 @@ the consensus parameters, but only apply to that specific machine.
 
 One of the goals of the circuit padding framework is to provide improved
 evaluation and scientific reproducibility for lower cost. This includes both
-the choice of the compact C structure representation (which has an
-easy-to-produce bitstring representation for optimization by
+the [choice](#13-computation-model) of the compact C structure representation
+(which has an easy-to-produce bitstring representation for optimization by
 gradient descent, GAs, or GANs), as well as rapid prototyping and evaluation.
 
 So far, whenever evaluation cost has been a barrier, each research group has
