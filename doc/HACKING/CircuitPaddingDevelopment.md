@@ -1052,14 +1052,18 @@ high amounts of padding, we may want to change this. See [ticket
 
 ### 7.2. Timing and Queuing Optimizations
 
-As of this writing (and Tor 0.4.1-stable), the cell event callbacks come from
-post-decryption points in the cell processing codepath, and from the
-pre-queue points in the cell send codepath. This means that our cell events
-will not reflect the actual time when packets are read or sent on the
-wire. This is much worse in the send direction, as the circuitmux queue,
-channel outbuf, and kernel TCP buffer will impose significant additional
-delay between when we currently report that a packet was sent, and when it
-actually hits the wire.
+The circuitpadding framework has some timing related issues that may impact
+results. If high-resolution timestamps are fed to opaque deep learning
+trainers, those training models may end up able to differentiate padding
+traffic from non-padding traffic due to these timing bugs.
+
+The circuit padding cell event callbacks come from post-decryption points in
+the cell processing codepath, and from the pre-queue points in the cell send
+codepath. This means that our cell events will not reflect the actual time
+when packets are read or sent on the wire. This is much worse in the send
+direction, as the circuitmux queue, channel outbuf, and kernel TCP buffer will
+impose significant additional delay between when we currently report that a
+packet was sent, and when it actually hits the wire.
 
 [Ticket 29494](https://bugs.torproject.org/29494) has a more detailed
 description of this problem, and an experimental branch that changes the cell
@@ -1084,6 +1088,9 @@ cells, and [ticket 32670](https://bugs.torproject.org/32670) describes a
 libevent timer accuracy issue, which causes callbacks to vary up to 10ms from
 their scheduled time, even in absence of load.
 
+All of these issues strongly suggest that you either truncate the resolution
+of any timers you feed to your classifier, or that you omit timestamps
+entirely from the classification problem until these issues are addressed.
 
 ### 7.3. Better Machine Negotiation
 
