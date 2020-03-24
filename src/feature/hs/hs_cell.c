@@ -284,6 +284,7 @@ introduce1_set_encrypted_link_spec(trn_cell_introduce_encrypted_t *cell,
   tor_assert(smartlist_len(lspecs) <= UINT8_MAX);
 
   uint8_t lspecs_num = (uint8_t) smartlist_len(lspecs);
+  log_warn(LD_REND, "PoW-Test: Adding %d link specs", lspecs_num);
   trn_cell_introduce_encrypted_set_nspec(cell, lspecs_num);
   /* We aren't duplicating the link specifiers object here which means that
    * the ownership goes to the trn_cell_introduce_encrypted_t cell and those
@@ -310,6 +311,7 @@ introduce1_set_encrypted_padding(const trn_cell_introduce1_t *cell,
     trn_cell_introduce_encrypted_setlen_pad(enc_cell, padding);
     memset(trn_cell_introduce_encrypted_getarray_pad(enc_cell), 0,
            trn_cell_introduce_encrypted_getlen_pad(enc_cell));
+    log_warn(LD_REND, "PoW-Test: HS INTRO padding: %ld", padding);
   }
 }
 
@@ -489,36 +491,35 @@ hs_cell_add_pow_extension(trn_cell_extension_t *ext)
    * Field3: "This sentence is a lie.\0" */
   const char *fields[] = {
 #ifdef SINGLE_FIELD_SINGLE_EXTENSION
-      /* the single field test maxes out at 255 chars */
-                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. This is v2: This proof cant be proven true"
-                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. This is v2: This proof cant be proven true"
+      /* the single field test maxes out at 255 bytes in test, but 253 bytes on live */
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. So v2: This proof can't be proven true...."
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. So v2: This proof can't be proven true...."
 #elif defined(TWO_FIELD_SINGLE_EXTENSION)
-      /* The double field can be longer, because we have about 289 chars total */
-                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. This is v2: This proof can't be proven true.",
-                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. This is v2: This proof can't be proven true."
+      /* The double field allows 253 bytes total */
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. So v2: This proof can't be proven true..",
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. So v2: This proof can't be proven true.."
 #elif defined(MULTIPLE_FIELDS_SINGLE_EXTENSION)
-      /* Multiple fields must be shorter, because of field+type info overhead */
+      /* Multiple fields must be shorter, because of field+type info overhead - 217 bytes on live */
                             "Hi mom,",
                             "Here's a proof that I'm a human:",
                             "This sentence is false.",
-                            "But Tarski says no. This is v2:",
-                            "This proof of my humanity cannot be proven true.",
+                            "Tarski says no.",
+                            "v2: This proof cant be proven true..",
                             "Hi mom,",
                             "Here's a proof that I'm a human:",
                             "This sentence is false.",
-                            "But Tarski says no. This is v2:",
-                            "This proof of my humanity cannot be proven true.."
+                            "Tarski says no.",
+                            "v2: This proof cant be proven true..."
 #elif defined(SINGLE_FIELD_TWO_EXENSIONS)
-      /* Double multiple fields must be shorter still, because of field+type info overhead */
-                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski."
-                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski.."
+      /* Two extensions can send a little less than half the data of one - about 124 bytes each. */
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. So v2: This proof can't be proven true.."
 #elif defined(MULTIPLE_FIELDS_TWO_EXENSIONS)
-      /* Double multiple fields must be shorter still, because of field+type info overhead */
+      /* Double multiple fields must be shorter still, because of field+type info overhead - about 108 bytes each. */
                             "Hi mom,",
                             "Here's a proof that I'm a human:",
                             "This sentence is false.",
-                            "But Tarski says no. This is v2:",
-                            "This proof of my humanity cannot be proven true.",
+                            "Tarski says no.",
+                            "v2: This proof can't be proven true.",
 #endif
                           };
 #define NUM_FIELDS (sizeof(fields)/sizeof(char*))

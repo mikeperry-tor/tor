@@ -1293,6 +1293,9 @@ node_get_link_specifier_smartlist,(const node_t *node, bool direct_conn))
     smartlist_add(lspecs, ls);
   }
 
+  /* XXX: Temporary hack to disable sending ipv6 link specs, since the
+   * service doesn't use it anyway right now. */
+#if 0
   /* Check for IPv6. If so, include it as well. */
   if (node_has_ipv6_orport(node)) {
     ls = link_specifier_new();
@@ -1307,6 +1310,7 @@ node_get_link_specifier_smartlist,(const node_t *node, bool direct_conn))
     link_specifier_set_ls_len(ls, addr_len + sizeof(ap.port));
     smartlist_add(lspecs, ls);
   }
+#endif
 
   return lspecs;
 }
