@@ -303,6 +303,7 @@ introduce1_set_encrypted_padding(const trn_cell_introduce1_t *cell,
   /* This is the length we expect to have once encoded of the whole cell. */
   ssize_t full_len = trn_cell_introduce1_encoded_len(cell) +
                      trn_cell_introduce_encrypted_encoded_len(enc_cell);
+  log_warn(LD_REND, "PoW-Test: HS INTRO full_Len before padding: %ld", full_len);
   tor_assert(full_len > 0);
   if (full_len < HS_CELL_INTRODUCE1_MIN_SIZE) {
     size_t padding = HS_CELL_INTRODUCE1_MIN_SIZE - full_len;
@@ -400,6 +401,153 @@ introduce1_encrypt_and_encode(trn_cell_introduce1_t *cell,
   tor_free(encrypted);
 }
 
+void
+hs_cell_dump_pow_extensions(trn_cell_extension_t *ext, const char *loc)
+{
+  /* Print out extension fields.
+   * XXX: This code is horribly unsafe. It trusts lengths and also
+   *      the extensions field layering is very confusing to me still,
+   *      so I probably made other mistakes too. But hey it works! */
+  ssize_t extns = trn_cell_extension_get_num(ext);
+  trn_cell_extension_field_t **ext_fields = trn_cell_extension_getarray_fields(ext);
+  int total_extn_bytes = 0;
+
+  log_warn(LD_REND, "PoW-Test: Got %ld extns at %s", extns, loc);
+
+  for (int i = 0; i < extns; i++) {
+    int field_len = trn_cell_extension_field_get_field_len(ext_fields[i]);
+    char *str = tor_malloc_zero(field_len);
+    total_extn_bytes += field_len;
+
+    for (int j = 0; j < field_len; j++) {
+      str[j] = trn_cell_extension_field_get_field(ext_fields[i], j);
+    }
+
+    log_warn(LD_REND, "PoW-Test: Got str: %s", str);
+    tor_free(str);
+  }
+  log_warn(LD_REND, "PoW-Test: Read %d extension bytes at intropoint", total_extn_bytes);
+}
+
+/* Test description:
+ *
+ * There are two endpoint option defines:
+ *   * TICKET_33650_SEND_TO_SERVICE
+ *     - Adds extension field(s) to encrypted portion of INTRO1/2
+ *   * TICKET_33650_SEND_TO_INTROPOINT
+ *     - Adds extension field(s) to unencrypted portion of INTRO1/2
+ *
+ * Either or both can be enabled. If both are enabled, the same extension fields will
+ * be added in each place of the cell (and thus will have half as much space).
+ *
+ * There are also several options for what to send:
+ *   * SINGLE_FIELD_SINGLE_EXTENSION
+ *     - This sends max bytes as one field. Because a field can only be 255 bytes long,
+ *       that is the limiting factor here, for one enpoint. Two endpoints won't work.
+ *   * TWO_FIELD_SINGLE_EXTENSION
+ *     - This sends max bytes as two fields. This allows more bytes to be sent to one
+ *       endpoint, but still won't work with two endpoints.
+ *   * MULTIPLE_FIELDS_SINGLE_EXTENSION
+ *     - This sends max bytes spread across 10 fields. Because fields have overhead,
+ *       this is still less bytes than TWO_FIELD_SINGLE_EXTENSION.
+ *   * SINGLE_FIELD_TWO_EXENSIONS
+ *     - This sends the max bytes that can be sent to both the intropoint and the
+ *       service, spread over one field for each extension.
+ *   * MULTIPLE_FIELDS_TWO_EXENSIONS
+ *     - This sends the max bytes that can be sent to both the intropoint and the
+ *       service, spread over 5 fields each.
+ */
+
+/* Either, both, or neither of these can be selected */
+#define TICKET_33650_SEND_TO_SERVICE
+//#define TICKET_33650_SEND_TO_INTROPOINT
+
+/* Only one of these field options may be selected, and the first three
+ * can only be used if you only send extensions to one endpoint. */
+#define SINGLE_FIELD_SINGLE_EXTENSION
+//#define TWO_FIELD_SINGLE_EXTENSION
+//#define MULTIPLE_FIELDS_SINGLE_EXTENSION
+
+/* These can be sent to both endpoints (intro and service) */
+//#define SINGLE_FIELD_TWO_EXENSIONS
+//#define MULTIPLE_FIELDS_TWO_EXENSIONS
+
+/* Check for sanity */
+#if defined(TICKET_33650_SEND_TO_SERVICE) && defined(TICKET_33650_SEND_TO_INTROPOINT)
+# if defined(SINGLE_FIELD_SINGLE_EXTENSION) || \
+     defined(MULTIPLE_FIELDS_SINGLE_EXTENSION) || \
+     defined(MULTIPLE_FIELDS_SINGLE_EXTENSION)
+#  error "Can't send the selected field option to both intro and service"
+# endif
+#endif
+
+static void
+hs_cell_add_pow_extension(trn_cell_extension_t *ext)
+{
+  /* Field1: "Hi mom,\0"
+   * Field2: "Here's proof I'm human:\0"
+   * Field3: "This sentence is a lie.\0" */
+  const char *fields[] = {
+#ifdef SINGLE_FIELD_SINGLE_EXTENSION
+      /* the single field test maxes out at 255 chars */
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. This is v2: This proof cant be proven true"
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. This is v2: This proof cant be proven true"
+#elif defined(TWO_FIELD_SINGLE_EXTENSION)
+      /* The double field can be longer, because we have about 289 chars total */
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. This is v2: This proof can't be proven true.",
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski says no. This is v2: This proof can't be proven true."
+#elif defined(MULTIPLE_FIELDS_SINGLE_EXTENSION)
+      /* Multiple fields must be shorter, because of field+type info overhead */
+                            "Hi mom,",
+                            "Here's a proof that I'm a human:",
+                            "This sentence is false.",
+                            "But Tarski says no. This is v2:",
+                            "This proof of my humanity cannot be proven true.",
+                            "Hi mom,",
+                            "Here's a proof that I'm a human:",
+                            "This sentence is false.",
+                            "But Tarski says no. This is v2:",
+                            "This proof of my humanity cannot be proven true.."
+#elif defined(SINGLE_FIELD_TWO_EXENSIONS)
+      /* Double multiple fields must be shorter still, because of field+type info overhead */
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski."
+                            "Hi mom, Here's a proof that I'm a human: This sentence is false. But Tarski.."
+#elif defined(MULTIPLE_FIELDS_TWO_EXENSIONS)
+      /* Double multiple fields must be shorter still, because of field+type info overhead */
+                            "Hi mom,",
+                            "Here's a proof that I'm a human:",
+                            "This sentence is false.",
+                            "But Tarski says no. This is v2:",
+                            "This proof of my humanity cannot be proven true.",
+#endif
+                          };
+#define NUM_FIELDS (sizeof(fields)/sizeof(char*))
+
+  int total_added = 0;
+
+  /* Number of fields and number of extensions *must* agree */
+  trn_cell_extension_set_num(ext, NUM_FIELDS);
+  trn_cell_extension_setlen_fields(ext, NUM_FIELDS);
+
+  trn_cell_extension_field_t **ext_fields = trn_cell_extension_getarray_fields(ext);
+
+  for (unsigned i = 0; i < NUM_FIELDS; i++) {
+    /* Fields that exist are not allocated by default.. */
+    ext_fields[i] = trn_cell_extension_field_new();
+
+    /* Length of field and field length *must* agree */
+    trn_cell_extension_field_setlen_field(ext_fields[i], strlen(fields[i])+1);
+    trn_cell_extension_field_set_field_len(ext_fields[i], strlen(fields[i])+1);
+    total_added += strlen(fields[i]+1);
+
+    for (unsigned j = 0; j <= strlen(fields[i]); j++) {
+      trn_cell_extension_field_set_field(ext_fields[i], j, fields[i][j]);
+    }
+  }
+
+  log_warn(LD_REND, "PoW-Test: Total extensions added: %d", total_added);
+}
+
 /** Using the INTRODUCE1 data, setup the ENCRYPTED section in cell. This means
  * set it, encrypt it and encode it. */
 static void
@@ -419,6 +567,11 @@ introduce1_set_encrypted(trn_cell_introduce1_t *cell,
   ext = trn_cell_extension_new();
   tor_assert(ext);
   trn_cell_extension_set_num(ext, 0);
+
+#ifdef TICKET_33650_SEND_TO_SERVICE
+  hs_cell_add_pow_extension(ext);
+#endif
+
   trn_cell_introduce_encrypted_set_extensions(enc_cell, ext);
 
   /* Set the rendezvous cookie. */
@@ -949,6 +1102,10 @@ hs_cell_parse_introduce2(hs_cell_introduce2_data_t *data,
     smartlist_add(data->link_specifiers, lspec_dup);
   }
 
+  /* Print out unencrypted fields. */
+  trn_cell_extension_t *extns = trn_cell_introduce_encrypted_get_extensions(enc_cell);
+  hs_cell_dump_pow_extensions(extns, "service");
+
   /* Success. */
   ret = 0;
   log_info(LD_REND, "Valid INTRODUCE2 cell. Launching rendezvous circuit.");
@@ -1020,6 +1177,11 @@ hs_cell_build_introduce1(const hs_cell_introduce1_data_t *data,
   ext = trn_cell_extension_new();
   tor_assert(ext);
   trn_cell_extension_set_num(ext, 0);
+
+#ifdef TICKET_33650_SEND_TO_INTROPOINT
+  hs_cell_add_pow_extension(ext);
+#endif
+
   trn_cell_introduce1_set_extensions(cell, ext);
 
   /* Set the legacy ID field. */
@@ -1034,6 +1196,8 @@ hs_cell_build_introduce1(const hs_cell_introduce1_data_t *data,
 
   /* Final encoding. */
   cell_len = trn_cell_introduce1_encode(cell_out, RELAY_PAYLOAD_SIZE, cell);
+
+  log_warn(LD_REND, "PoW-Test: Final INTRO1 encoded len: %ld", cell_len);
 
   trn_cell_introduce1_free(cell);
   return cell_len;

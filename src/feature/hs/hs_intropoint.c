@@ -683,6 +683,9 @@ handle_introduce1(or_circuit_t *client_circ, const uint8_t *request,
     goto send_ack;
   }
 
+  /* Print out unencrypted fields. */
+  hs_cell_dump_pow_extensions(parsed_cell->extensions, "intropoint");
+
   /* Relay the cell to the service on its intro circuit with an INTRODUCE2
    * cell which is the same exact payload. */
   if (relay_send_command_from_edge(CONTROL_CELL_ID, TO_CIRCUIT(service_circ),

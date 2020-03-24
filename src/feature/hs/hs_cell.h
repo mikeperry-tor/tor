@@ -110,6 +110,10 @@ int hs_cell_parse_rendezvous2(const uint8_t *payload, size_t payload_len,
                               uint8_t *handshake_info,
                               size_t handshake_info_len);
 
+struct trn_cell_extension_st;
+typedef struct trn_cell_extension_st trn_cell_extension_t;
+void hs_cell_dump_pow_extensions(trn_cell_extension_t *ext, const char *loc);
+
 /* Util API. */
 void hs_cell_introduce1_data_clear(hs_cell_introduce1_data_t *data);
 
