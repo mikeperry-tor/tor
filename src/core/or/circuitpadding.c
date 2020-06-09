@@ -2050,6 +2050,12 @@ circpad_machine_conditions_apply(origin_circuit_t *circ,
   return 1;
 }
 
+/**
+ * Check to see if any of the keep conditions still apply to this circuit.
+ *
+ * These conditions keep the machines active if they match, but do not
+ * cause new machines to start up.
+ */
 static inline bool
 circpad_machine_conditions_keep(origin_circuit_t *circ,
                                 const circpad_machine_spec_t *machine)
@@ -2058,7 +2064,7 @@ circpad_machine_conditions_keep(origin_circuit_t *circ,
       & machine->conditions.keep_purpose_mask))
     return 1;
 
-  if (!(circpad_circuit_state(circ) & machine->conditions.keep_state_mask))
+  if ((circpad_circuit_state(circ) & machine->conditions.keep_state_mask))
     return 1;
 
   return 0;
@@ -2129,11 +2135,13 @@ circpad_shutdown_old_machines(origin_circuit_t *on_circ)
   circuit_t *circ = TO_CIRCUIT(on_circ);
 
   FOR_EACH_ACTIVE_CIRCUIT_MACHINE_BEGIN(i, circ) {
+    /* We shut down a machine if neither the apply conditions
+     * nor the keep conditions match. If either set of conditions match,
+     * keep it around. */
     if (!circpad_machine_conditions_apply(on_circ,
-                                        circ->padding_machine[i]) ||
+                                        circ->padding_machine[i]) &&
         !circpad_machine_conditions_keep(on_circ,
-                                        circ->padding_machine[i]))
-    {
+                                        circ->padding_machine[i])) {
       uint32_t machine_ctr = circ->padding_info[i]->machine_ctr;
       // Clear machineinfo (frees timers)
       circpad_circuit_machineinfo_free_idx(circ, i);
