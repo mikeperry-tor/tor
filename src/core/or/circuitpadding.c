@@ -266,6 +266,9 @@ circpad_marked_circuit_for_padding(circuit_t *circ, int reason)
 /**
  * Free all the machineinfos in <b>circ</b> that match <b>machine_num</b>.
  *
+ * If machine_ctr is non-zero, also make sure it matches the padding_info's
+ * machine counter before freeing.
+ *
  * Returns true if any machineinfos with that number were freed.
  * False otherwise. */
 static int
@@ -276,6 +279,8 @@ free_circ_machineinfos_with_machine_num(circuit_t *circ, int machine_num,
   FOR_EACH_CIRCUIT_MACHINE_BEGIN(i) {
     if (circ->padding_machine[i] &&
         circ->padding_machine[i]->machine_num == machine_num) {
+      /* If machine_ctr is non-zero, make sure it matches too. This
+       * is to ensure that old STOP messages don't shutdown newer machines. */
       if (machine_ctr && circ->padding_info[i] &&
           circ->padding_info[i]->machine_ctr != machine_ctr) {
         log_info(LD_CIRC,
