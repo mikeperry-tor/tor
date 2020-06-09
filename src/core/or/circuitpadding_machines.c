@@ -105,8 +105,7 @@ circpad_machine_client_hide_intro_circuits(smartlist_t *machines_sl)
 
   /* Start the machine on fresh intro circs. */
   client_machine->conditions.apply_purpose_mask =
-    circpad_circ_purpose_to_mask(CIRCUIT_PURPOSE_C_INTRODUCING) |
-    circpad_circ_purpose_to_mask(CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT);
+    circpad_circ_purpose_to_mask(CIRCUIT_PURPOSE_C_INTRODUCING);
 
   /* If the client purpose changes back to CIRCUIT_PURPOSE_C_INTRODUCING,
    * or transitions to CIRCUIT_PURPOSE_C_INTRODUCE_ACKED, keep the machine
@@ -114,6 +113,7 @@ circpad_machine_client_hide_intro_circuits(smartlist_t *machines_sl)
    * keep the machine around if it is in the CIRCUIT_PADDING purpose
    * (but do not try to take over other machines in that purpose). */
   client_machine->conditions.keep_purpose_mask =
+    circpad_circ_purpose_to_mask(CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT) |
     circpad_circ_purpose_to_mask(CIRCUIT_PURPOSE_C_INTRODUCE_ACKED) |
     circpad_circ_purpose_to_mask(CIRCUIT_PURPOSE_C_CIRCUIT_PADDING);
 
