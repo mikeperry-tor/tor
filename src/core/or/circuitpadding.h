@@ -575,7 +575,11 @@ typedef struct circpad_machine_runtime_t {
   /** What state is this machine in? */
   circpad_statenum_t current_state;
 
-  /** Machine counter, for shutdown sync */
+  /** Machine counter, for shutdown sync.
+   *
+   *  Set from circuit_t.padding_machine_ctr, which is incremented each
+   *  padding machine instantiation.
+   */
   uint32_t machine_ctr;
 
   /**
