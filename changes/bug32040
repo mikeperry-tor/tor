@@ -1,0 +1,5 @@
+  o Minor bugfixes (circuitpadding):
+    - Add the abilility to keep circuit padding machines if they match a set
+      of circuit state or purposes. This allows us to have machines that start
+      up under some conditions but don't shut down under others. Part of fix
+      for bug 32040; bugfix on 0.4.1.1-alpha.
