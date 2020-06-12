@@ -2942,7 +2942,7 @@ helper_test_hs_machines(bool test_intro_circs)
 
   /* Change the purpose, see the machine getting attached */
   client_side->purpose = test_intro_circs ?
-    CIRCUIT_PURPOSE_C_INTRODUCING : CIRCUIT_PURPOSE_C_REND_JOINED;
+    CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT : CIRCUIT_PURPOSE_C_REND_JOINED;
   circpad_add_matching_machines(origin_client_side, origin_padding_machines);
   tt_ptr_op(client_side->padding_info[0], OP_NE, NULL);
   tt_ptr_op(client_side->padding_machine[0], OP_NE, NULL);
