@@ -499,15 +499,15 @@ typedef enum {
 
 /** Initial value for both sides of a circuit transmission window when the
  * circuit is initialized.  Measured in cells. */
-#define CIRCWINDOW_START 1000
+#define CIRCWINDOW_START 50000
 #define CIRCWINDOW_START_MIN 100
-#define CIRCWINDOW_START_MAX 1000
+#define CIRCWINDOW_START_MAX 50000
 /** Amount to increment a circuit window when we get a circuit SENDME. */
 #define CIRCWINDOW_INCREMENT 100
 /** Initial value on both sides of a stream transmission window when the
  * stream is initialized.  Measured in cells. */
-#define STREAMWINDOW_START 500
-#define STREAMWINDOW_START_MAX 500
+#define STREAMWINDOW_START 50000
+#define STREAMWINDOW_START_MAX 50000
 /** Amount to increment a stream window when we get a stream SENDME. */
 #define STREAMWINDOW_INCREMENT 50
 

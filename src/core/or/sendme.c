@@ -393,8 +393,8 @@ sendme_connection_edge_consider_sending(edge_connection_t *conn)
 
   while (conn->deliver_window <=
          (STREAMWINDOW_START - STREAMWINDOW_INCREMENT)) {
-    log_debug(log_domain, "Outbuf %" TOR_PRIuSZ ", queuing stream SENDME.",
-              TO_CONN(conn)->outbuf_flushlen);
+    log_info(log_domain, "Outbuf %" TOR_PRIuSZ ", queuing stream SENDME %d.",
+              TO_CONN(conn)->outbuf_flushlen, conn->deliver_window);
     conn->deliver_window += STREAMWINDOW_INCREMENT;
     if (connection_edge_send_command(conn, RELAY_COMMAND_SENDME,
                                      NULL, 0) < 0) {
@@ -422,7 +422,8 @@ sendme_circuit_consider_sending(circuit_t *circ, crypt_path_t *layer_hint)
 
   while ((layer_hint ? layer_hint->deliver_window : circ->deliver_window) <=
           CIRCWINDOW_START - CIRCWINDOW_INCREMENT) {
-    log_debug(LD_CIRC,"Queuing circuit sendme.");
+    log_info(LD_APP,"Queuing circuit sendme %d",
+             (layer_hint ? layer_hint->deliver_window : circ->deliver_window));
     if (layer_hint) {
       layer_hint->deliver_window += CIRCWINDOW_INCREMENT;
       digest = cpath_get_sendme_digest(layer_hint);
@@ -484,7 +485,7 @@ sendme_process_circuit_level(crypt_path_t *layer_hint,
       return -END_CIRC_REASON_TORPROTOCOL;
     }
     layer_hint->package_window += CIRCWINDOW_INCREMENT;
-    log_debug(LD_APP, "circ-level sendme at origin, packagewindow %d.",
+    log_info(LD_APP, "circ-level sendme at origin, packagewindow %d.",
               layer_hint->package_window);
 
     /* We count circuit-level sendme's as valid delivered data because they
@@ -502,7 +503,7 @@ sendme_process_circuit_level(crypt_path_t *layer_hint,
       return -END_CIRC_REASON_TORPROTOCOL;
     }
     circ->package_window += CIRCWINDOW_INCREMENT;
-    log_debug(LD_EXIT, "circ-level sendme at non-origin, packagewindow %d.",
+    log_info(LD_APP, "circ-level sendme at non-origin, packagewindow %d.",
               circ->package_window);
   }
 
@@ -546,7 +547,7 @@ sendme_process_stream_level(edge_connection_t *conn, circuit_t *circ,
     circuit_read_valid_data(TO_ORIGIN_CIRCUIT(circ), cell_body_len);
   }
 
-  log_debug(CIRCUIT_IS_ORIGIN(circ) ? LD_APP : LD_EXIT,
+  log_info(CIRCUIT_IS_ORIGIN(circ) ? LD_APP : LD_EXIT,
             "stream-level sendme, package_window now %d.",
             conn->package_window);
   return 0;
@@ -572,7 +573,7 @@ sendme_circuit_data_received(circuit_t *circ, crypt_path_t *layer_hint)
     domain = LD_EXIT;
   }
 
-  log_debug(domain, "Circuit deliver_window now %d.", deliver_window);
+  log_info(domain, "Circuit deliver_window now %d.", deliver_window);
   return deliver_window;
 }
 
@@ -609,7 +610,7 @@ sendme_note_circuit_data_packaged(circuit_t *circ, crypt_path_t *layer_hint)
     domain = LD_EXIT;
   }
 
-  log_debug(domain, "Circuit package_window now %d.", package_window);
+  log_info(domain, "Circuit package_window now %d.", package_window);
   return package_window;
 }
 
@@ -621,7 +622,7 @@ sendme_note_stream_data_packaged(edge_connection_t *conn)
   tor_assert(conn);
 
   --conn->package_window;
-  log_debug(LD_APP, "Stream package_window now %d.", conn->package_window);
+  log_info(LD_APP, "Stream package_window now %d.", conn->package_window);
   return conn->package_window;
 }
 
