@@ -1353,7 +1353,9 @@ route_len_for_purpose(uint8_t purpose, extend_info_t *exit_ei)
     if (purpose == CIRCUIT_PURPOSE_S_CONNECT_REND ||
         purpose == CIRCUIT_PURPOSE_C_HSDIR_GET ||
         purpose == CIRCUIT_PURPOSE_C_INTRODUCING)
-      return routelen+2;
+      return routelen+1; // XXX: Hack to still use HSLayer3Nodes here
+                         // XXX: Alternatively, setting MiddleNodes will
+                         // also restrict this
   }
 
   if (!exit_ei)
