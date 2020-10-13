@@ -644,7 +644,7 @@ static const config_var_t option_vars_[] = {
   OBSOLETE("SchedulerLowWaterMark__"),
   OBSOLETE("SchedulerHighWaterMark__"),
   OBSOLETE("SchedulerMaxFlushCells__"),
-  V(KISTSchedRunInterval,        MSEC_INTERVAL, "0 msec"),
+  V(KISTSchedRunInterval,        MSEC_INTERVAL, "2 msec"),
   V(KISTSockBufSizeFactor,       DOUBLE,   "1.0"),
   V(Schedulers,                  CSV,      "KIST,KISTLite,Vanilla"),
   V(ShutdownWaitLength,          INTERVAL, "30 seconds"),

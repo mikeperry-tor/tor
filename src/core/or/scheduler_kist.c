@@ -790,12 +790,12 @@ kist_scheduler_run_interval(void)
   int run_interval = get_options()->KISTSchedRunInterval;
 
   if (run_interval != 0) {
-    log_debug(LD_SCHED, "Found KISTSchedRunInterval=%" PRId32 " in torrc. "
+    log_notice(LD_SCHED, "Found KISTSchedRunInterval=%" PRId32 " in torrc. "
                         "Using that.", run_interval);
     return run_interval;
   }
 
-  log_debug(LD_SCHED, "KISTSchedRunInterval=0, turning to the consensus.");
+  log_notice(LD_SCHED, "KISTSchedRunInterval=0, turning to the consensus.");
 
   /* Will either be the consensus value or the default. Note that 0 can be
    * returned which means the consensus wants us to NOT use KIST. */
