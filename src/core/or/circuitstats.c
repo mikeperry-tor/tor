@@ -270,19 +270,7 @@ circuit_build_times_enough_to_compute(const circuit_build_times_t *cbt)
 double
 circuit_build_times_quantile_cutoff(void)
 {
-  int32_t num = networkstatus_get_param(NULL, "cbtquantile",
-                                        CBT_DEFAULT_QUANTILE_CUTOFF,
-                                        CBT_MIN_QUANTILE_CUTOFF,
-                                        CBT_MAX_QUANTILE_CUTOFF);
-
-  if (!(get_options()->LearnCircuitBuildTimeout)) {
-    log_debug(LD_BUG,
-              "circuit_build_times_quantile_cutoff() called, cbtquantile"
-              " is %d",
-              num);
-  }
-
-  return num/100.0;
+  return CBT_DEFAULT_QUANTILE_CUTOFF/100.0;
 }
 
 /**
