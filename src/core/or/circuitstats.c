@@ -1009,6 +1009,9 @@ circuit_build_times_shuffle_and_store_array(circuit_build_times_t *cbt,
 static int
 circuit_build_times_filter_timeouts(circuit_build_times_t *cbt)
 {
+  (void)cbt;
+  return 0;
+#if 0
   int num_filtered=0, i=0;
   double timeout_rate = 0;
   build_time_t max_timeout = 0;
@@ -1034,6 +1037,7 @@ circuit_build_times_filter_timeouts(circuit_build_times_t *cbt)
           cbt->total_build_times, num_filtered, max_timeout);
 
   return num_filtered;
+#endif
 }
 
 /**
@@ -1205,14 +1209,15 @@ circuit_build_times_update_alpha(circuit_build_times_t *cbt)
 
     if (x[i] < cbt->Xm) {
       a += tor_mathlog(cbt->Xm);
+      n++;
     } else if (x[i] == CBT_BUILD_ABANDONED) {
       abandoned_count++;
     } else {
       a += tor_mathlog(x[i]);
       if (x[i] > max_time)
         max_time = x[i];
+      n++;
     }
-    n++;
   }
 
   /*
@@ -1221,11 +1226,11 @@ circuit_build_times_update_alpha(circuit_build_times_t *cbt)
    * performs this same check, and resets state if it hits it. If we
    * hit it at runtime, something serious has gone wrong.
    */
-  if (n!=cbt->total_build_times) {
+  if (n!=cbt->total_build_times-abandoned_count) {
     log_err(LD_CIRC, "Discrepancy in build times count: %d vs %d", n,
             cbt->total_build_times);
   }
-  tor_assert(n==cbt->total_build_times);
+  tor_assert(n==cbt->total_build_times-abandoned_count);
 
   if (max_time <= 0) {
     /* This can happen if Xm is actually the *maximum* value in the set.
@@ -1238,7 +1243,8 @@ circuit_build_times_update_alpha(circuit_build_times_t *cbt)
     return 0;
   }
 
-  a += abandoned_count*tor_mathlog(max_time);
+  abandoned_count = 0;
+  //a += abandoned_count*tor_mathlog(max_time);
 
   a -= n*tor_mathlog(cbt->Xm);
   // Estimator comes from Eq #4 in:
