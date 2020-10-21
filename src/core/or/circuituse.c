@@ -1315,13 +1315,12 @@ circuit_predict_and_launch_new(void)
     flags = CIRCLAUNCH_NEED_CAPACITY;
     /* if there are no exits in the consensus, make timeout
      * circuits internal */
-    if (router_have_consensus_path() == CONSENSUS_PATH_INTERNAL)
-      flags |= CIRCLAUNCH_IS_INTERNAL;
+    flags |= CIRCLAUNCH_IS_INTERNAL;
 
-      log_info(LD_CIRC,
+    log_info(LD_CIRC,
                "Have %d clean circs need another buildtime test circ.", num);
-      circuit_launch(CIRCUIT_PURPOSE_HS_VANGUARDS, flags);
-      return;
+    circuit_launch_predicted_hs_circ(flags);
+    return;
   }
 }
 
