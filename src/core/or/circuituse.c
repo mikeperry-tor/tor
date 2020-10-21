@@ -1265,6 +1265,7 @@ circuit_predict_and_launch_new(void)
   if (num >= MAX_UNUSED_OPEN_CIRCUITS)
     return;
 
+#if 0
   if (needs_exit_circuits(now, &port_needs_uptime, &port_needs_capacity)) {
     if (port_needs_uptime)
       flags |= CIRCLAUNCH_NEED_UPTIME;
@@ -1308,6 +1309,7 @@ circuit_predict_and_launch_new(void)
     circuit_launch_predicted_hs_circ(flags);
     return;
   }
+#endif
 
   if (needs_circuits_for_build(num)) {
     flags = CIRCLAUNCH_NEED_CAPACITY;
@@ -1318,7 +1320,7 @@ circuit_predict_and_launch_new(void)
 
       log_info(LD_CIRC,
                "Have %d clean circs need another buildtime test circ.", num);
-      circuit_launch(CIRCUIT_PURPOSE_C_GENERAL, flags);
+      circuit_launch(CIRCUIT_PURPOSE_HS_VANGUARDS, flags);
       return;
   }
 }
