@@ -2056,6 +2056,8 @@ circuit_should_cannibalize_to_build(uint8_t purpose_to_build,
                                     int onehop_tunnel)
 {
 
+  return 0;
+
   /* Do not try to cannibalize if this is a one hop circuit. */
   if (onehop_tunnel) {
     return 0;
