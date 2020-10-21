@@ -1061,11 +1061,6 @@ circuit_build_no_more_hops(origin_circuit_t *circ)
     circuit_mark_for_close(TO_CIRCUIT(circ), END_CIRC_REASON_FINISHED);
   }
 
-  // If we're still building test circs, just close this
-  if (circuit_build_times_needs_circuits(get_circuit_build_times())) {
-    circuit_mark_for_close(TO_CIRCUIT(circ), END_CIRC_REASON_FINISHED);
-  }
-
   return 0;
 }
 

@@ -1265,7 +1265,6 @@ circuit_predict_and_launch_new(void)
   if (num >= MAX_UNUSED_OPEN_CIRCUITS)
     return;
 
-#if 0
   if (needs_exit_circuits(now, &port_needs_uptime, &port_needs_capacity)) {
     if (port_needs_uptime)
       flags |= CIRCLAUNCH_NEED_UPTIME;
@@ -1309,7 +1308,6 @@ circuit_predict_and_launch_new(void)
     circuit_launch_predicted_hs_circ(flags);
     return;
   }
-#endif
 
   if (needs_circuits_for_build(num)) {
     flags = CIRCLAUNCH_NEED_CAPACITY;
@@ -1485,14 +1483,13 @@ circuit_expire_old_circuits_clientside(void)
       continue;
 
     cutoff = now;
-    cutoff.tv_sec -= TO_ORIGIN_CIRCUIT(circ)->circuit_idle_timeout;
+    cutoff.tv_sec -= 5;
 
     /* If the circuit has been dirty for too long, and there are no streams
      * on it, mark it for close.
      */
     if (circ->timestamp_dirty &&
-        circ->timestamp_dirty + get_options()->MaxCircuitDirtiness <
-          now.tv_sec &&
+        circ->timestamp_dirty + 5 < now.tv_sec &&
         !TO_ORIGIN_CIRCUIT(circ)->p_streams /* nothing attached */ ) {
       log_debug(LD_CIRC, "Closing n_circ_id %u (dirty %ld sec ago, "
                 "purpose %d)",

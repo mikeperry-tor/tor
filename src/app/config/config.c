@@ -558,7 +558,7 @@ static const config_var_t option_vars_[] = {
   V(MaxOnionQueueDelay,          MSEC_INTERVAL, "1750 msec"),
   V(MaxUnparseableDescSizeToLog, MEMUNIT, "10 MB"),
   VAR("MyFamily",                LINELIST, MyFamily_lines,       NULL),
-  V(NewCircuitPeriod,            INTERVAL, "30 seconds"),
+  V(NewCircuitPeriod,            INTERVAL, "5 seconds"),
   OBSOLETE("NamingAuthoritativeDirectory"),
   OBSOLETE("NATDListenAddress"),
   VPORT(NATDPort),
