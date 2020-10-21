@@ -1613,6 +1613,8 @@ circuit_build_times_network_check_changed(circuit_build_times_t *cbt)
   int timeout_count=0;
   int i;
 
+  return 0;
+
   if (cbt->liveness.timeouts_after_firsthop &&
       cbt->liveness.num_recent_circs > 0) {
     /* how many of our recent circuits made it to the first hop but then
