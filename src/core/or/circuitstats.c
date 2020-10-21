@@ -1827,7 +1827,7 @@ circuit_build_times_set_timeout(circuit_build_times_t *cbt)
     return;
 
   if (cbt->timeout_ms < circuit_build_times_min_timeout()) {
-    log_info(LD_CIRC, "Set buildtimeout to low value %fms. Setting to %dms",
+    log_notice(LD_CIRC, "Set buildtimeout to low value %fms. Setting to %dms",
              cbt->timeout_ms, circuit_build_times_min_timeout());
     cbt->timeout_ms = circuit_build_times_min_timeout();
     if (cbt->close_ms < cbt->timeout_ms) {
@@ -1848,10 +1848,10 @@ circuit_build_times_set_timeout(circuit_build_times_t *cbt)
                "circuit is too slow to use after waiting %ld seconds.",
                cbt->total_build_times,
                tor_lround(cbt->timeout_ms/1000));
-    log_info(LD_CIRC,
-             "Circuit timeout data: %fms, %fms, Xm: %d, a: %f, r: %f",
+    log_notice(LD_CIRC,
+             "Circuit timeout data: %fms, %fms, Xm: %d, a: %f, r: %f, circs: %d",
              cbt->timeout_ms, cbt->close_ms, cbt->Xm, cbt->alpha,
-             timeout_rate);
+             timeout_rate, cbt->total_build_times);
   } else if (prev_timeout < tor_lround(cbt->timeout_ms/1000)) {
     log_info(LD_CIRC,
                "Based on %d circuit times, it looks like we need to wait "
@@ -1859,12 +1859,12 @@ circuit_build_times_set_timeout(circuit_build_times_t *cbt)
                "circuit is too slow to use after waiting %ld seconds.",
                cbt->total_build_times,
                tor_lround(cbt->timeout_ms/1000));
-    log_info(LD_CIRC,
-             "Circuit timeout data: %fms, %fms, Xm: %d, a: %f, r: %f",
+    log_notice(LD_CIRC,
+             "Circuit timeout data: %fms, %fms, Xm: %d, a: %f, r: %f, circs: %d",
              cbt->timeout_ms, cbt->close_ms, cbt->Xm, cbt->alpha,
-             timeout_rate);
+             timeout_rate, cbt->total_build_times);
   } else {
-    log_info(LD_CIRC,
+    log_notice(LD_CIRC,
              "Set circuit build timeout to %lds (%fms, %fms, Xm: %d, a: %f,"
              " r: %f) based on %d circuit times",
              tor_lround(cbt->timeout_ms/1000),
