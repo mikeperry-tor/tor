@@ -1483,13 +1483,13 @@ circuit_expire_old_circuits_clientside(void)
       continue;
 
     cutoff = now;
-    cutoff.tv_sec -= 5;
+    cutoff.tv_sec -= 10;
 
     /* If the circuit has been dirty for too long, and there are no streams
      * on it, mark it for close.
      */
     if (circ->timestamp_dirty &&
-        circ->timestamp_dirty + 5 < now.tv_sec &&
+        circ->timestamp_dirty + get_options()->MaxCircuitDirtiness < now.tv_sec &&
         !TO_ORIGIN_CIRCUIT(circ)->p_streams /* nothing attached */ ) {
       log_debug(LD_CIRC, "Closing n_circ_id %u (dirty %ld sec ago, "
                 "purpose %d)",
