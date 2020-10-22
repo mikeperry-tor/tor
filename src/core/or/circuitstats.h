@@ -108,7 +108,7 @@ void circuit_build_times_mark_circ_as_measurement_only(origin_circuit_t *circ);
 #define CBT_MAX_MIN_CIRCUITS_TO_OBSERVE 10000
 
 /** Cutoff percentile on the CDF for our timeout estimation. */
-#define CBT_DEFAULT_QUANTILE_CUTOFF 50
+#define CBT_DEFAULT_QUANTILE_CUTOFF 60
 #define CBT_MIN_QUANTILE_CUTOFF 5
 #define CBT_MAX_QUANTILE_CUTOFF 99
 double circuit_build_times_quantile_cutoff(void);
