@@ -688,7 +688,7 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
     log_notice(LD_CIRC,
              "Long (rend?) circ %"PRIu32" purpose %"PRIu32" len %"PRIu32", using timeout %lf insead of %lf",
              circ->global_identifier, (uint32_t)TO_CIRCUIT(circ)->purpose, (uint32_t)path_len,
-             timeout_ms, (timeout_ms*path_len)/DEFAULT_ROUTE_LEN);
+             (timeout_ms*path_len)/DEFAULT_ROUTE_LEN, timeout_ms);
     timeout_ms = (timeout_ms*path_len)/DEFAULT_ROUTE_LEN;
     hacked_timeout = 1;
   }
@@ -712,7 +712,7 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
         log_notice(LD_CIRC,
              "Timing out long (rend?) circ %"PRIu32" purpose %d len %d, using timeout %lf insead of %lf",
              circ->global_identifier, TO_CIRCUIT(circ)->purpose, path_len,
-             timeout_ms, (timeout_ms*path_len)/DEFAULT_ROUTE_LEN);
+             (timeout_ms*path_len)/DEFAULT_ROUTE_LEN, timeout_ms);
       }
       circuit_build_times_mark_circ_as_measurement_only(circ);
     }
