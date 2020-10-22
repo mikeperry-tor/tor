@@ -672,6 +672,8 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
 {
   struct timeval end;
   long timediff;
+  double timeout_ms = get_circuit_build_timeout_ms();
+  int hacked_timeout = 0;
 
   /* If circuit build times are disabled, let circuit_expire_building()
    * handle it.. */
@@ -679,12 +681,16 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
     return;
   }
 
-  /* Is this a circuit for which the timeout applies in a straight-forward
-   * way? If so, handle it below. If not, just return (and let
-   * circuit_expire_building() eventually take care of it).
-   */
-  if (!circuit_timeout_want_to_count_circ(circ)) {
-    return;
+  int path_len = circuit_get_cpath_opened_len(circ);
+
+  // Hack for rend circs
+  if (path_len > DEFAULT_ROUTE_LEN) {
+    log_notice(LD_CIRC,
+             "Long (rend?) circ %"PRIu32" purpose %"PRIu32" len %"PRIu32", using timeout %lf insead of %lf",
+             circ->global_identifier, (uint32_t)TO_CIRCUIT(circ)->purpose, (uint32_t)path_len,
+             timeout_ms, (timeout_ms*path_len)/DEFAULT_ROUTE_LEN);
+    timeout_ms = (timeout_ms*path_len)/DEFAULT_ROUTE_LEN;
+    hacked_timeout = 1;
   }
 
   tor_gettimeofday(&end);
@@ -694,8 +700,7 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
    * purpose here. But don't do any timeout handling here if there
    * are no circuits opened yet. Save it for circuit_expire_building()
    * (to allow it to handle timeout "relaxing" over there). */
-  if (timediff > get_circuit_build_timeout_ms() &&
-      circuit_any_opened_circuits_cached()) {
+  if (timediff > timeout_ms) {
 
     /* Circuits are allowed to last longer for measurement.
      * Switch their purpose and wait. */
@@ -703,6 +708,12 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
       log_info(LD_CIRC,
                "Deciding to timeout circuit %"PRIu32"\n",
                (circ->global_identifier));
+      if (hacked_timeout) {
+        log_notice(LD_CIRC,
+             "Timing out long (rend?) circ %"PRIu32" purpose %d len %d, using timeout %lf insead of %lf",
+             circ->global_identifier, TO_CIRCUIT(circ)->purpose, path_len,
+             timeout_ms, (timeout_ms*path_len)/DEFAULT_ROUTE_LEN);
+      }
       circuit_build_times_mark_circ_as_measurement_only(circ);
     }
   }
@@ -1674,17 +1685,14 @@ circuit_build_times_network_check_changed(circuit_build_times_t *cbt)
 double
 circuit_build_times_timeout_rate(const circuit_build_times_t *cbt)
 {
-  int i=0,timeouts=0;
-  for (i = 0; i < CBT_NCIRCUITS_TO_OBSERVE; i++) {
-    if (cbt->circuit_build_times[i] >= cbt->timeout_ms) {
-       timeouts++;
-    }
+  double timeout_rate = 0;
+  const double total_circuits =
+    ((double)cbt->num_circ_timeouts) + cbt->num_circ_succeeded;
+  if (total_circuits >= 1.0) {
+    timeout_rate = cbt->num_circ_timeouts / total_circuits;
   }
 
-  if (!cbt->total_build_times)
-    return 0;
-
-  return ((double)timeouts)/cbt->total_build_times;
+  return (double)timeout_rate;
 }
 
 /**
