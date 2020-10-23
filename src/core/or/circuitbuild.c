@@ -1329,8 +1329,7 @@ route_len_for_purpose(uint8_t purpose, extend_info_t *exit_ei)
      *     S - G - L2 - L3 - HSDIR
      *     S - G - L2 - L3 - I
      */
-    if (purpose == CIRCUIT_PURPOSE_C_ESTABLISH_REND ||
-        purpose == CIRCUIT_PURPOSE_S_HSDIR_POST ||
+    if (purpose == CIRCUIT_PURPOSE_S_HSDIR_POST ||
         purpose == CIRCUIT_PURPOSE_S_ESTABLISH_INTRO)
       return routelen+1;
 
