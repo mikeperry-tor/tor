@@ -714,7 +714,8 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
 
     /* Circuits are allowed to last longer for measurement.
      * Switch their purpose and wait. */
-    if (circ->base_.purpose != CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT) {
+    if (circ->base_.purpose != CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT
+        && circuit_timeout_want_to_count_circ(circ)) {
       log_info(LD_CIRC,
                "Deciding to timeout circuit %"PRIu32"\n",
                (circ->global_identifier));
@@ -731,7 +732,7 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
   /* If the circuit is built to exactly the DEFAULT_ROUTE_LEN,
    * add it to our buildtimes. */
   if (circuit_get_cpath_opened_len(circ) == DEFAULT_ROUTE_LEN &&
-      circuit_purpose_is_hidden_service(CIRCUIT_PURPOSE_HS_VANGUARDS)) {
+      circuit_purpose_is_hidden_service(TO_CIRCUIT(circ)->purpose)) {
     /* If the circuit build time is much greater than we would have cut
      * it off at, we probably had a suspend event along this codepath,
      * and we should discard the value.
