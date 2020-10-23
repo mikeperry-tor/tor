@@ -681,6 +681,16 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
     return;
   }
 
+  // Ignore hsdirs and intros
+  if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_S_HSDIR_POST ||
+      TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_HSDIR_GET ||
+      TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_INTRODUCING ||
+      TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT ||
+      TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_INTRODUCE_ACKED ||
+      TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_S_INTRO ||
+      TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_S_ESTABLISH_INTRO)
+    return;
+
   int path_len = circuit_get_cpath_opened_len(circ);
 
   // Hack for rend circs
