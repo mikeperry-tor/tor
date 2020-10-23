@@ -681,6 +681,9 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
     return;
   }
 
+  if (!circuit_timeout_want_to_count_circ(circ))
+    return;
+
   // Ignore hsdirs and intros
   if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_S_HSDIR_POST ||
       TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_HSDIR_GET ||
@@ -709,7 +712,7 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
 
     if(TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_S_CONNECT_REND) {
       timeout_ms = (timeout_ms*path_len)/DEFAULT_ROUTE_LEN;
-      hacked_timeout = 1;
+      //hacked_timeout = 1;
     }
   }
 

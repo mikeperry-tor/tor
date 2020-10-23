@@ -119,8 +119,8 @@ double circuit_build_times_quantile_cutoff(void);
 #define CBT_MAX_TEST_FREQUENCY INT32_MAX
 
 /** Lowest allowable value for CircuitBuildTimeout in milliseconds */
-#define CBT_DEFAULT_TIMEOUT_MIN_VALUE (25)
-#define CBT_MIN_TIMEOUT_MIN_VALUE 25
+#define CBT_DEFAULT_TIMEOUT_MIN_VALUE (100)
+#define CBT_MIN_TIMEOUT_MIN_VALUE 100
 #define CBT_MAX_TIMEOUT_MIN_VALUE INT32_MAX
 
 /** Initial circuit build timeout in milliseconds */
