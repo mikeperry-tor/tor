@@ -710,12 +710,12 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
    * purpose here. But don't do any timeout handling here if there
    * are no circuits opened yet. Save it for circuit_expire_building()
    * (to allow it to handle timeout "relaxing" over there). */
-  if (timediff > timeout_ms) {
+  if (timediff > timeout_ms &&
+      (path_len <= DEFAULT_ROUTE_LEN || hacked_timeout)) {
 
     /* Circuits are allowed to last longer for measurement.
      * Switch their purpose and wait. */
-    if (circ->base_.purpose != CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT
-        && circuit_timeout_want_to_count_circ(circ)) {
+    if (circ->base_.purpose != CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT) {
       log_info(LD_CIRC,
                "Deciding to timeout circuit %"PRIu32"\n",
                (circ->global_identifier));
