@@ -685,12 +685,21 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
 
   // Hack for rend circs
   if (path_len > DEFAULT_ROUTE_LEN) {
-    log_notice(LD_CIRC,
-             "Long (rend?) circ %"PRIu32" purpose %"PRIu32" len %"PRIu32", using timeout %lf insead of %lf",
-             circ->global_identifier, (uint32_t)TO_CIRCUIT(circ)->purpose, (uint32_t)path_len,
-             (timeout_ms*path_len)/DEFAULT_ROUTE_LEN, timeout_ms);
-    timeout_ms = (timeout_ms*path_len)/DEFAULT_ROUTE_LEN;
-    hacked_timeout = 1;
+    if (TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_S_HSDIR_POST &&
+        TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_C_HSDIR_GET &&
+        TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_C_INTRODUCING &&
+        TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_S_CONNECT_REND &&
+        TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_S_ESTABLISH_INTRO)
+      log_notice(LD_CIRC,
+             "Long circ %"PRIu32" purpose %s len %"PRIu32,
+             circ->global_identifier,
+             circuit_purpose_to_string(TO_CIRCUIT(circ)->purpose),
+             (uint32_t)path_len);
+
+    if(TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_S_CONNECT_REND) {
+      timeout_ms = (timeout_ms*path_len)/DEFAULT_ROUTE_LEN;
+      hacked_timeout = 1;
+    }
   }
 
   tor_gettimeofday(&end);
