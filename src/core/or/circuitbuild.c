@@ -90,6 +90,10 @@ static const node_t *choose_good_middle_server(uint8_t purpose,
                           cpath_build_state_t *state,
                           crypt_path_t *head,
                           int cur_len);
+static const node_t *
+pick_vanguard_middle_node(const or_options_t *options,
+                          router_crn_flags_t flags, int cur_len,
+                          const smartlist_t *excluded);
 
 /** This function tries to get a channel to the specified endpoint,
  * and then calls command_setup_channel() to give it the right
@@ -1866,6 +1870,16 @@ choose_good_exit_server(origin_circuit_t *circ,
         return router_choose_random_node(NULL, options->ExcludeNodes, flags);
       else
         return choose_good_exit_server_general(flags);
+    case CIRCUIT_PURPOSE_C_ESTABLISH_REND:
+      {
+        /* Pick a new RP */
+        const node_t *rendezvous_node =
+            pick_vanguard_middle_node(options, flags, 2, NULL);
+        log_info(LD_REND, "Picked new RP: %s",
+                 safe_str_client(node_describe(rendezvous_node)));
+        return rendezvous_node;
+      }
+
   }
   log_warn(LD_BUG,"Unhandled purpose %d", TO_CIRCUIT(circ)->purpose);
   tor_fragile_assert();
