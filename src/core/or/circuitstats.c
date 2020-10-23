@@ -689,6 +689,7 @@ circuit_build_times_handle_completed_hop(origin_circuit_t *circ)
         TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_C_HSDIR_GET &&
         TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_C_INTRODUCING &&
         TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_S_CONNECT_REND &&
+        TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT &&
         TO_CIRCUIT(circ)->purpose != CIRCUIT_PURPOSE_S_ESTABLISH_INTRO)
       log_notice(LD_CIRC,
              "Long circ %"PRIu32" purpose %s len %"PRIu32,

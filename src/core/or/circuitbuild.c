@@ -1866,14 +1866,6 @@ choose_good_exit_server(origin_circuit_t *circ,
         return router_choose_random_node(NULL, options->ExcludeNodes, flags);
       else
         return choose_good_exit_server_general(flags);
-    case CIRCUIT_PURPOSE_C_ESTABLISH_REND:
-      {
-        /* Pick a new RP */
-        const node_t *rendezvous_node = pick_rendezvous_node(flags);
-        log_info(LD_REND, "Picked new RP: %s",
-                 safe_str_client(node_describe(rendezvous_node)));
-        return rendezvous_node;
-      }
   }
   log_warn(LD_BUG,"Unhandled purpose %d", TO_CIRCUIT(circ)->purpose);
   tor_fragile_assert();
@@ -2308,6 +2300,8 @@ choose_good_middle_server(uint8_t purpose,
       log_fn(LOG_NOTICE, LD_CIRC, "Restricted middle not available");
     }
   } else {
+    if (circuit_purpose_is_hidden_service(purpose))
+      log_warn(LD_GENERAL, "WTF! Random node still for HS purpose %d", purpose);
     choice = router_choose_random_node(excluded, options->ExcludeNodes, flags);
   }
   smartlist_free(excluded);
