@@ -886,7 +886,7 @@ circuit_build_times_get_xm(circuit_build_times_t *cbt)
 {
   build_time_t i, nbins;
   build_time_t *nth_max_bin;
-  int32_t bin_counts=0;
+  int32_t xm_counts=0;
   build_time_t ret = 0;
   uint32_t *histogram = circuit_build_times_create_histogram(cbt, &nbins);
   int n=0;
@@ -938,17 +938,23 @@ circuit_build_times_get_xm(circuit_build_times_t *cbt)
     num_modes = 1;
   }
 
-  for (n = 0; n < num_modes; n++) {
-    bin_counts += histogram[nth_max_bin[n]];
-    ret += CBT_BIN_TO_MS(nth_max_bin[n])*histogram[nth_max_bin[n]];
-    log_info(LD_CIRC, "Xm mode #%d: %u %u", n, CBT_BIN_TO_MS(nth_max_bin[n]),
-             histogram[nth_max_bin[n]]);
+  /* Now, take the full average of all buildtimes less than the
+   * nth mode */
+  for (i=0; i< CBT_NCIRCUITS_TO_OBSERVE; i++) {
+    if (!x[i]) {
+      continue;
+    }
+
+    if (x[i] <= CBT_BIN_TO_MS(nth_max_bin[num_modes-1])) {
+      xm_counts++;
+      ret += x[i];
+    }
   }
 
-  /* bin_counts can become zero if all of our last CBT_NCIRCUITS_TO_OBSERVE
+  /* xm_counts can become zero if all of our last CBT_NCIRCUITS_TO_OBSERVE
    * circuits were abandoned before they completed. This shouldn't happen,
    * though. We should have reset/re-learned a lower timeout first. */
-  if (bin_counts == 0) {
+  if (xm_counts == 0) {
     ret = 0;
     log_warn(LD_CIRC,
                "No valid circuit build time data out of %d times, %u modes, "
@@ -957,9 +963,9 @@ circuit_build_times_get_xm(circuit_build_times_t *cbt)
     goto done;
   }
 
-  tor_assert(bin_counts > 0);
+  tor_assert(xm_counts > 0);
 
-  ret /= bin_counts;
+  ret /= xm_counts;
 
  done:
   tor_free(histogram);
