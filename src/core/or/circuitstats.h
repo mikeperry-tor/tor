@@ -62,6 +62,12 @@ void circuit_build_times_mark_circ_as_measurement_only(origin_circuit_t *circ);
 #define CBT_MIN_NUM_XM_MODES 1
 #define CBT_MAX_NUM_XM_MODES 20
 
+/** Minimum percentage of buildtimes that can be below Xm before we
+ *  use num_xm_modes consensus param */
+#define CBT_DEFAULT_XM_PCT 10
+#define CBT_MIN_XM_PCT 1
+#define CBT_MAX_XM_PCT 90
+
 /**
  * CBT_BUILD_ABANDONED is our flag value to represent a force-closed
  * circuit (Aka a 'right-censored' pareto value).

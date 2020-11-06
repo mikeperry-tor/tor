@@ -229,6 +229,30 @@ circuit_build_times_default_num_xm_modes(void)
 }
 
 /**
+ * Retrieve and bounds-check the cbtxmpct consensus parameter.
+ *
+ * Effect: If more than this percent of build times falls below Xm,
+ * then we always use 'cbtnummodes'.
+ */
+static int32_t
+circuit_build_times_default_xm_pct(void)
+{
+  int32_t num = networkstatus_get_param(NULL, "cbtxmpct",
+                                        CBT_DEFAULT_XM_PCT,
+                                        CBT_MIN_XM_PCT,
+                                        CBT_MAX_XM_PCT);
+
+  if (!(get_options()->LearnCircuitBuildTimeout)) {
+    log_debug(LD_BUG,
+              "circuit_build_times_default_num_xm_modes() called, cbtxmpct"
+              " is %d",
+              num);
+  }
+
+  return num;
+}
+
+/**
  * Retrieve and bounds-check the cbtmincircs consensus parameter.
  *
  * Effect: This is the minimum number of circuits to build before
@@ -867,14 +891,13 @@ circuit_build_times_get_xm(circuit_build_times_t *cbt)
   uint32_t *histogram = circuit_build_times_create_histogram(cbt, &nbins);
   int n=0;
   int num_modes = circuit_build_times_default_num_xm_modes();
+  int xm_pct = circuit_build_times_default_xm_pct();
+  build_time_t *x=cbt->circuit_build_times;
+  int num_below_xm = 0;
+  int abandoned_count=0;
 
   tor_assert(nbins > 0);
   tor_assert(num_modes > 0);
-
-  // Only use one mode if < 1000 buildtimes. Not enough data
-  // for multiple.
-  if (cbt->total_build_times < CBT_NCIRCUITS_TO_OBSERVE)
-    num_modes = 1;
 
   nth_max_bin = tor_calloc(num_modes, sizeof(build_time_t));
 
@@ -891,6 +914,28 @@ circuit_build_times_get_xm(circuit_build_times_t *cbt)
         nth_max_bin[n] = i;
       }
     }
+  }
+
+  /* Determine if more than cbtxmpct buildtimes fall below
+   * Xm */
+  for (i=0; i< CBT_NCIRCUITS_TO_OBSERVE; i++) {
+    if (!x[i]) {
+      continue;
+    }
+
+    if (x[i] < CBT_BIN_TO_MS(nth_max_bin[0])) {
+      num_below_xm++;
+    } else if (x[i] == CBT_BUILD_ABANDONED) {
+      abandoned_count++;
+    }
+  }
+
+  // Only use one mode if < 1000 buildtimes or more than xm_pct buildtimes
+  // faster than the mode
+  if (cbt->total_build_times < CBT_NCIRCUITS_TO_OBSERVE &&
+      ((double)num_below_xm)/(cbt->total_build_times-abandoned_count)
+         <= xm_pct) {
+    num_modes = 1;
   }
 
   for (n = 0; n < num_modes; n++) {
