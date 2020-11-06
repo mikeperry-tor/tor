@@ -1,0 +1,12 @@
+  o Minor bugfixes (circuit build timeout):
+    - Use a full maximum likelihood estimator for Pareto parameters of the
+      timeout distribution, instead of a "right-censored estimator". This
+      change causes us to completely ignore circuits that never finish building
+      in our timeout calculations. Previously, we were counting such unfinished
+      circuits as having the highest possible timeout value, when in reality
+      these circuits most likely just contain relays that are offline.
+      Additionally, we now wait a bit longer to let circuits complete for
+      measurement purposes, lower the minimum possible effective timeout from
+      1.5 seconds to 10ms, and increase the resolution of the circuit build
+      time histrogram from 50ms bin widths to 10ms bin widths.
+      Fixes bug 40168; bugfix on 0.2.2.14-alpha.
