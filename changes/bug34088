@@ -1,5 +1,6 @@
   o Minor bugfixes (circuit build timeout):
     - Introduce a new consensus parameter 'cbtxmpct' that causes us to use
       'cbtnummodes' if more than 'cbtxmpct' percent of our circuit buildtimes
-      are below the mode of the buildtimes. Fixes bug 34088;
-      bugfix on 0.2.2.9-alpha.
+      are below the mode of the buildtimes. Additionally, compute Xm as the
+      average of all buildtimes below the 'cbtnummodes' mode of the build
+      time histogram. Fixes bug 34088; bugfix on 0.2.2.9-alpha.
